@@ -776,6 +776,7 @@ private fun TaskRow(
     onDelete: () -> Unit,
     showCountdown: Boolean = false
 ) {
+    var menuOpen by remember { mutableStateOf(false) }
     val todayStart = remember(now) { startOfDay(now) }
     val checked = if (isHabit) task.lastCompletedDay == todayStart else task.isCompleted
     val overdue = !isHabit && !task.isCompleted && task.dueTime < now

@@ -48,6 +48,7 @@ import androidx.compose.material.icons.rounded.Visibility
 import androidx.compose.material.icons.rounded.VisibilityOff
 import androidx.compose.material.icons.rounded.WbSunny
 import androidx.compose.material3.Card
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -109,6 +110,7 @@ import java.util.concurrent.TimeUnit
  * 3. 快捷输入支持自然语言添加任务。
  * 4. 任务按今天、打卡、计划和已完成分组展示。
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TaskListScreen(
     vm: TaskViewModel,

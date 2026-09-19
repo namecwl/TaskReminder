@@ -27,8 +27,6 @@ object NaturalLanguageParser {
         var hour = -1
         var minute = -1
 
-        // ===== 1. 重复 =====
-        // 每隔N天
         val intervalRegex = Regex("每隔([一二两三四五六七八九十\\d]{1,3})天")
         val intervalMatch = intervalRegex.find(text)
         if (intervalMatch != null) {
@@ -37,19 +35,16 @@ object NaturalLanguageParser {
             text = text.replace(intervalMatch.value, " ")
         }
 
-        // 每天
         if (repeatRule == RepeatRule.NONE && Regex("每天|每日|天天|每晚|每早|每晨").containsMatchIn(text)) {
             repeatRule = RepeatRule.DAILY
             text = text.replace(Regex("每天|每日|天天|每晚|每早|每晨"), " ")
         }
 
-        // 工作日
         if (repeatRule == RepeatRule.NONE && Regex("每个?工作日|周一到周五|周一至周五").containsMatchIn(text)) {
             repeatRule = RepeatRule.WEEKDAY
             text = text.replace(Regex("每个?工作日|周一到周五|周一至周五"), " ")
         }
 
-        // 每周X
         if (repeatRule == RepeatRule.NONE) {
             val weekDayMap = mapOf(
                 "一" to 1, "二" to 2, "三" to 3, "四" to 4,
@@ -65,7 +60,6 @@ object NaturalLanguageParser {
             }
         }
 
-        // 每月X号
         if (repeatRule == RepeatRule.NONE) {
             val monthlyRegex = Regex("每(?:个)?月([一二两三四五六七八九十\\d]{1,3})[号日]")
             val m = monthlyRegex.find(text)
@@ -76,7 +70,6 @@ object NaturalLanguageParser {
             }
         }
 
-        // ===== 2. 日期 =====
         val today = Calendar.getInstance().apply {
             set(Calendar.HOUR_OF_DAY, 0)
             set(Calendar.MINUTE, 0)
@@ -84,7 +77,6 @@ object NaturalLanguageParser {
             set(Calendar.MILLISECOND, 0)
         }
 
-        // 大后天
         if (Regex("大后天").containsMatchIn(text)) {
             explicitDate = today.timeInMillis + 3 * 86_400_000L
             text = text.replace(Regex("大后天"), " ")
@@ -98,7 +90,6 @@ object NaturalLanguageParser {
             explicitDate = today.timeInMillis
             text = text.replace(Regex("今天|今日|今儿|今晚|今早"), " ")
         } else {
-            // X月X日/号
             val mdRegex = Regex("([一二两三四五六七八九十\\d]{1,3})月([一二两三四五六七八九十\\d]{1,3})[日号]")
             val mdMatch = mdRegex.find(text)
             if (mdMatch != null) {
@@ -116,7 +107,6 @@ object NaturalLanguageParser {
                 explicitDate = cal.timeInMillis
                 text = text.replace(mdRegex, " ")
             } else {
-                // M.D / M/D / M-D
                 val mdRegex2 = Regex("(?<![\\d])(\\d{1,2})[./\\-](\\d{1,2})(?![\\d])")
                 val m2 = mdRegex2.find(text)
                 if (m2 != null) {
@@ -139,7 +129,6 @@ object NaturalLanguageParser {
             }
         }
 
-        // ===== 3. 时间段 =====
         var period = -1
         val periodRegex = Regex("凌晨|清晨|早上|早晨|上午|中午|正午|下午|傍晚|晚上|夜里|夜间")
         val periodMatch = periodRegex.find(text)
@@ -158,8 +147,6 @@ object NaturalLanguageParser {
                 text.substring(periodMatch.range.last + 1)
         }
 
-        // ===== 4. 具体时间 =====
-        // 数字形式：10:20 / 10：20 / 10点20分
         val timeRegex1 = Regex("(\\d{1,2})[:：点](\\d{1,2})?分?")
         val t1 = timeRegex1.find(text)
         if (t1 != null) {
@@ -167,7 +154,6 @@ object NaturalLanguageParser {
             minute = t1.groupValues[2].toIntOrNull() ?: 0
             text = text.replace(t1.value, " ")
         } else {
-            // 中文：十点 / 十点二十 / 十点半 / 十点一刻 / 十点三刻
             val timeRegex2 = Regex(
                 "([一二两三四五六七八九十]{1,3})[点時时]" +
                     "(半|一刻|三刻|[一二两三四五六七八九十]{1,3}分?)?"
@@ -187,7 +173,6 @@ object NaturalLanguageParser {
             }
         }
 
-        // ===== 5. 根据时间段修正小时 =====
         if (hour in 0..23 && period >= 0) {
             when (period) {
                 0 -> if (hour == 12) hour = 0
@@ -199,7 +184,6 @@ object NaturalLanguageParser {
             }
         }
 
-        // ===== 6. 组装 =====
         val cal = Calendar.getInstance().apply {
             timeInMillis = if (explicitDate > 0) explicitDate else today.timeInMillis
         }
@@ -210,19 +194,16 @@ object NaturalLanguageParser {
             cal.set(Calendar.SECOND, 0)
             cal.set(Calendar.MILLISECOND, 0)
 
-            // 未指定日期，但时间已过 → 推到明天
             if (explicitDate < 0) {
                 val nowMs = System.currentTimeMillis()
                 if (cal.timeInMillis <= nowMs) cal.add(Calendar.DAY_OF_YEAR, 1)
             }
         } else if (explicitDate > 0) {
-            // 只指定日期，没时间 → 默认早 9 点
             cal.set(Calendar.HOUR_OF_DAY, 9)
             cal.set(Calendar.MINUTE, 0)
             cal.set(Calendar.SECOND, 0)
             cal.set(Calendar.MILLISECOND, 0)
         } else {
-            // 什么都没有 → 一小时后
             cal.timeInMillis = System.currentTimeMillis() + 3_600_000L
             cal.set(Calendar.SECOND, 0)
             cal.set(Calendar.MILLISECOND, 0)

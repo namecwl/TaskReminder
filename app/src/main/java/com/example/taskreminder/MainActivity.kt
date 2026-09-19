@@ -13,12 +13,14 @@ import com.example.taskreminder.ui.PermissionScreen
 import com.example.taskreminder.ui.TaskEditScreen
 import com.example.taskreminder.ui.TaskListScreen
 import com.example.taskreminder.ui.theme.AppTheme
+import com.example.taskreminder.util.OngoingNotifier
 import com.example.taskreminder.vm.TaskViewModel
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         NotificationHelper.ensureChannel(this)
+        OngoingNotifier.ensureChannel(this)
         setContent {
             AppTheme {
                 AppRoot()
@@ -38,7 +40,6 @@ private fun AppRoot() {
     var showPermission by remember {
         mutableStateOf(!prefs.getBoolean("permission_done", false))
     }
-
     var editing by remember { mutableStateOf<Pair<Boolean, Task?>?>(null) }
 
     when {
@@ -46,7 +47,6 @@ private fun AppRoot() {
             prefs.edit().putBoolean("permission_done", true).apply()
             showPermission = false
         })
-
         editing != null -> {
             val (_, task) = editing!!
             TaskEditScreen(
@@ -58,7 +58,6 @@ private fun AppRoot() {
                 onCancel = { editing = null }
             )
         }
-
         else -> TaskListScreen(
             vm = vm,
             onEdit = { task -> editing = true to task },

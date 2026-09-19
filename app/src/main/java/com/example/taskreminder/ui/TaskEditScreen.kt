@@ -26,6 +26,7 @@ import androidx.compose.material.icons.rounded.CalendarMonth
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.EditNote
+import androidx.compose.material.icons.rounded.LocalFireDepartment
 import androidx.compose.material.icons.rounded.NotificationsActive
 import androidx.compose.material.icons.rounded.Repeat
 import androidx.compose.material.icons.rounded.Save
@@ -98,6 +99,7 @@ fun TaskEditScreen(
     var advance by remember {
         mutableStateOf((task?.advanceMinutes ?: 5).toString())
     }
+    var streakInput by remember { mutableStateOf((task?.streak ?: 0).toString()) }
 
     var showDatePicker by remember { mutableStateOf(false) }
     var showTimePicker by remember { mutableStateOf(false) }
@@ -106,6 +108,18 @@ fun TaskEditScreen(
         if (title.isBlank()) {
             Toast.makeText(context, "请先填写任务标题", Toast.LENGTH_SHORT).show()
         } else {
+            val newStreak = if (repeatRule == RepeatRule.NONE) {
+                0
+            } else {
+                (streakInput.toIntOrNull() ?: 0).coerceAtLeast(0)
+            }
+            val existingLastDay = task?.lastCompletedDay ?: 0L
+            val newLastCompletedDay = when {
+                repeatRule == RepeatRule.NONE -> 0L
+                existingLastDay > 0L -> existingLastDay
+                newStreak > 0 -> yesterdayStart()
+                else -> 0L
+            }
             onSave(
                 (task ?: Task()).copy(
                     title = title.trim(),
@@ -118,7 +132,9 @@ fun TaskEditScreen(
                     advanceMinutes = (advance.toIntOrNull() ?: 0).coerceIn(0, 1440),
                     isCompleted = false,
                     completedAt = null,
-                    enabled = true
+                    enabled = true,
+                    streak = newStreak,
+                    lastCompletedDay = newLastCompletedDay
                 )
             )
         }
@@ -339,6 +355,29 @@ fun TaskEditScreen(
                 }
             }
 
+            if (repeatRule != RepeatRule.NONE) {
+                EditSectionCard(
+                    icon = Icons.Rounded.LocalFireDepartment,
+                    title = "打卡记录",
+                    subtitle = "已经坚持过一段时间时，可以直接修改连续天数"
+                ) {
+                    OutlinedTextField(
+                        value = streakInput,
+                        onValueChange = { streakInput = it.filter { char -> char.isDigit() } },
+                        label = { Text("已坚持天数") },
+                        placeholder = { Text("例如：30") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        "设置后从昨天开始计算最近连续记录，今天仍可继续打卡。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
             EditSectionCard(
                 icon = Icons.Rounded.NotificationsActive,
                 title = "提前提醒",
@@ -541,6 +580,14 @@ private fun dayStart(time: Long): Long = Calendar.getInstance().apply {
     set(Calendar.MILLISECOND, 0)
 }.timeInMillis
 
+private fun yesterdayStart(): Long = Calendar.getInstance().apply {
+    add(Calendar.DAY_OF_YEAR, -1)
+    set(Calendar.HOUR_OF_DAY, 0)
+    set(Calendar.MINUTE, 0)
+    set(Calendar.SECOND, 0)
+    set(Calendar.MILLISECOND, 0)
+}.timeInMillis
+
 private fun defaultDueTime(): Long {
     val calendar = Calendar.getInstance()
     calendar.add(Calendar.HOUR_OF_DAY, 1)
@@ -549,6 +596,10 @@ private fun defaultDueTime(): Long {
     calendar.set(Calendar.MILLISECOND, 0)
     return calendar.timeInMillis
 }
+
+
+
+
 
 
 

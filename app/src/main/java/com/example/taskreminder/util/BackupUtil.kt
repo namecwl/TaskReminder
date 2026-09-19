@@ -24,10 +24,12 @@ object BackupUtil {
                 put("completedAt", t.completedAt ?: JSONObject.NULL)
                 put("createdAt", t.createdAt)
                 put("enabled", t.enabled)
+                put("streak", t.streak)
+                put("lastCompletedDay", t.lastCompletedDay)
             })
         }
         return JSONObject().apply {
-            put("version", 1)
+            put("version", 2)
             put("exportedAt", System.currentTimeMillis())
             put("tasks", arr)
         }.toString(2)
@@ -53,7 +55,9 @@ object BackupUtil {
                     isCompleted = o.optBoolean("isCompleted", false),
                     completedAt = if (o.isNull("completedAt")) null else o.optLong("completedAt"),
                     createdAt = o.optLong("createdAt", System.currentTimeMillis()),
-                    enabled = o.optBoolean("enabled", true)
+                    enabled = o.optBoolean("enabled", true),
+                    streak = o.optInt("streak", 0),
+                    lastCompletedDay = o.optLong("lastCompletedDay", 0L)
                 )
             )
         }

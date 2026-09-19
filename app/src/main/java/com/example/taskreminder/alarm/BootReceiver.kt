@@ -22,6 +22,7 @@ class BootReceiver : BroadcastReceiver() {
                 val dao = TaskDatabase.getInstance(appContext).taskDao()
                 val scheduler = AlarmScheduler(appContext)
                 dao.getAllEnabled().forEach { scheduler.schedule(it) }
+                OngoingReminderService.start(appContext)
             } finally {
                 pending.finish()
             }

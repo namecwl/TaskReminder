@@ -10,8 +10,10 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import com.example.taskreminder.MainActivity
 import com.example.taskreminder.R
+import com.example.taskreminder.data.RepeatRule
 import com.example.taskreminder.data.Task
 import java.text.SimpleDateFormat
+import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 import java.util.concurrent.TimeUnit
@@ -42,8 +44,17 @@ object OngoingNotifier {
     fun update(context: Context, tasks: List<Task>) {
         ensureChannel(context)
         val now = System.currentTimeMillis()
-        val upcoming = tasks
-            .filter { !it.isCompleted && it.dueTime > now - 60_000L }
+        val todayStart = todayStartMillis()
+
+        val upcoming = tasks.asSequence()
+            .filter { !it.isCompleted }
+            .filter { t ->
+                if (t.repeatRule != RepeatRule.NONE) {
+                    // 习惯：今天已完成则跳过
+                    t.lastCompletedDay != todayStart
+                } else true
+            }
+            .filter { it.dueTime > now - 60_000L }
             .minByOrNull { it.dueTime }
 
         if (upcoming == null) {
@@ -85,6 +96,13 @@ object OngoingNotifier {
     fun cancel(context: Context) {
         NotificationManagerCompat.from(context).cancel(NOTIFICATION_ID)
     }
+
+    private fun todayStartMillis(): Long = Calendar.getInstance().apply {
+        set(Calendar.HOUR_OF_DAY, 0)
+        set(Calendar.MINUTE, 0)
+        set(Calendar.SECOND, 0)
+        set(Calendar.MILLISECOND, 0)
+    }.timeInMillis
 
     private fun formatDiff(diff: Long): String {
         if (diff <= 0) return "已过期"

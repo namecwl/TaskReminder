@@ -8,6 +8,7 @@ import com.example.taskreminder.data.TaskDatabase
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import java.util.Calendar
 
 class NotificationActionReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
@@ -34,19 +35,7 @@ class NotificationActionReceiver : BroadcastReceiver() {
                                 )
                             )
                         } else {
-                            val next = RepeatRule.nextTrigger(task, task.dueTime + 60_000L)
-                            if (next != null) {
-                                val updated = task.copy(dueTime = next)
-                                dao.update(updated)
-                                scheduler.schedule(updated)
-                            } else {
-                                dao.update(
-                                    task.copy(
-                                        isCompleted = true,
-                                        completedAt = System.currentTimeMillis()
-                                    )
-                                )
-                            }
+                            completeHabit(dao, task, scheduler)
                         }
                     }
                     ACTION_SNOOZE -> {
@@ -60,6 +49,47 @@ class NotificationActionReceiver : BroadcastReceiver() {
             }
         }
     }
+
+    private suspend fun completeHabit(
+        dao: com.example.taskreminder.data.TaskDao,
+        task: com.example.taskreminder.data.Task,
+        scheduler: AlarmScheduler
+    ) {
+        val todayStart = todayStartMillis()
+        val yesterdayStart = todayStart - 86_400_000L
+
+        val newStreak = when (task.lastCompletedDay) {
+            yesterdayStart -> task.streak + 1
+            todayStart -> task.streak
+            else -> 1
+        }
+
+        val next = RepeatRule.nextTrigger(task, task.dueTime + 60_000L)
+        if (next != null) {
+            val updated = task.copy(
+                dueTime = next,
+                lastCompletedDay = todayStart,
+                streak = newStreak,
+                completedAt = System.currentTimeMillis()
+            )
+            dao.update(updated)
+            scheduler.schedule(updated)
+        } else {
+            dao.update(
+                task.copy(
+                    isCompleted = true,
+                    completedAt = System.currentTimeMillis()
+                )
+            )
+        }
+    }
+
+    private fun todayStartMillis(): Long = Calendar.getInstance().apply {
+        set(Calendar.HOUR_OF_DAY, 0)
+        set(Calendar.MINUTE, 0)
+        set(Calendar.SECOND, 0)
+        set(Calendar.MILLISECOND, 0)
+    }.timeInMillis
 
     companion object {
         const val ACTION_COMPLETE = "com.example.taskreminder.ACTION_COMPLETE"

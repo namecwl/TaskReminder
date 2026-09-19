@@ -17,5 +17,7 @@ data class Task(
     val isCompleted: Boolean = false,
     val completedAt: Long? = null,
     val createdAt: Long = System.currentTimeMillis(),
-    val enabled: Boolean = true
+    val enabled: Boolean = true,
+    val streak: Int = 0,
+    val lastCompletedDay: Long = 0L
 )

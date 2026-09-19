@@ -13,7 +13,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
@@ -59,7 +58,7 @@ fun TaskListScreen(
         }
     }
 
-    LaunchedEffect(tasks) {
+    LaunchedEffect(tasks, now) {
         OngoingNotifier.update(context, tasks)
     }
 
@@ -92,10 +91,6 @@ fun TaskListScreen(
     }
 
     val groups = remember(tasks, now) { groupTasks(tasks, now) }
-    val nearest = remember(tasks, now) {
-        tasks.filter { !it.isCompleted && it.dueTime > now - 60_000L }
-            .minByOrNull { it.dueTime }
-    }
 
     var quickInput by remember { mutableStateOf("") }
 
@@ -159,64 +154,120 @@ fun TaskListScreen(
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            item { NearestBar(nearest, now) }
-
             item {
-                QuickAddBar(
+                OutlinedTextField(
                     value = quickInput,
                     onValueChange = { quickInput = it },
-                    onSubmit = {
-                        val parsed = NaturalLanguageParser.parse(quickInput)
-                        if (parsed.title.isNotBlank()) {
-                            vm.save(
-                                Task(
-                                    title = parsed.title,
-                                    note = "",
-                                    dueTime = parsed.dueTime,
-                                    repeatRule = parsed.repeatRule,
-                                    repeatInterval = parsed.repeatInterval,
-                                    repeatDaysOfWeek = parsed.repeatDaysOfWeek,
-                                    repeatDayOfMonth = parsed.repeatDayOfMonth,
-                                    advanceMinutes = 5
+                    modifier = Modifier.fillMaxWidth(),
+                    placeholder = { Text("一句话记一下：今天十点二十洗碗") },
+                    leadingIcon = { Icon(Icons.Default.Add, contentDescription = null) },
+                    trailingIcon = {
+                        if (quickInput.isNotBlank()) {
+                            IconButton(onClick = {
+                                submitQuick(quickInput) { parsed ->
+                                    vm.save(
+                                        Task(
+                                            title = parsed.title,
+                                            note = "",
+                                            dueTime = parsed.dueTime,
+                                            repeatRule = parsed.repeatRule,
+                                            repeatInterval = parsed.repeatInterval,
+                                            repeatDaysOfWeek = parsed.repeatDaysOfWeek,
+                                            repeatDayOfMonth = parsed.repeatDayOfMonth,
+                                            advanceMinutes = 5
+                                        )
+                                    )
+                                }
+                                quickInput = ""
+                            }) {
+                                Icon(Icons.Default.Send, contentDescription = "添加")
+                            }
+                        }
+                    },
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                    keyboardActions = KeyboardActions(onDone = {
+                        if (quickInput.isNotBlank()) {
+                            submitQuick(quickInput) { parsed ->
+                                vm.save(
+                                    Task(
+                                        title = parsed.title,
+                                        note = "",
+                                        dueTime = parsed.dueTime,
+                                        repeatRule = parsed.repeatRule,
+                                        repeatInterval = parsed.repeatInterval,
+                                        repeatDaysOfWeek = parsed.repeatDaysOfWeek,
+                                        repeatDayOfMonth = parsed.repeatDayOfMonth,
+                                        advanceMinutes = 5
+                                    )
                                 )
-                            )
+                            }
                             quickInput = ""
                         }
-                    }
+                    }),
+                    singleLine = true
                 )
             }
 
-            item { SectionHeader("今日事件", groups.today.size) }
+            item { SectionHeader("今天", groups.today.size) }
             if (groups.today.isEmpty()) {
-                item { EmptyHint("今天还没有任务") }
+                item { EmptyHint("今天还没有安排") }
             } else {
                 items(groups.today, key = { "today_${it.id}" }) { task ->
-                    TaskRow(task, now, { onEdit(task) }, { vm.toggleComplete(task) }, { vm.delete(task) })
+                    TaskRow(
+                        task = task,
+                        now = now,
+                        isHabit = false,
+                        onClick = { onEdit(task) },
+                        onToggle = { vm.toggleComplete(task) },
+                        onDelete = { vm.delete(task) }
+                    )
                 }
             }
 
-            item { SectionHeader("习惯", groups.habits.size) }
+            item { SectionHeader("打卡", groups.habits.size) }
             if (groups.habits.isEmpty()) {
                 item { EmptyHint("试试输入「每天八点吃药」") }
             } else {
                 items(groups.habits, key = { "habit_${it.id}" }) { task ->
-                    TaskRow(task, now, { onEdit(task) }, { vm.toggleComplete(task) }, { vm.delete(task) })
+                    TaskRow(
+                        task = task,
+                        now = now,
+                        isHabit = true,
+                        onClick = { onEdit(task) },
+                        onToggle = { vm.toggleComplete(task) },
+                        onDelete = { vm.delete(task) }
+                    )
                 }
             }
 
-            item { SectionHeader("未来事件", groups.future.size) }
+            item { SectionHeader("计划", groups.future.size) }
             if (groups.future.isEmpty()) {
                 item { EmptyHint("试试输入「明天下午三点开会」") }
             } else {
-                items(groups.future, key = { "future_${it.id}" }) { task ->
-                    TaskRow(task, now, { onEdit(task) }, { vm.toggleComplete(task) }, { vm.delete(task) }, showCountdown = true)
+                items(groups.future, key = { "plan_${it.id}" }) { task ->
+                    TaskRow(
+                        task = task,
+                        now = now,
+                        isHabit = false,
+                        onClick = { onEdit(task) },
+                        onToggle = { vm.toggleComplete(task) },
+                        onDelete = { vm.delete(task) },
+                        showCountdown = true
+                    )
                 }
             }
 
             if (showCompleted && groups.completed.isNotEmpty()) {
                 item { SectionHeader("已完成", groups.completed.size) }
                 items(groups.completed, key = { "done_${it.id}" }) { task ->
-                    TaskRow(task, now, { onEdit(task) }, { vm.toggleComplete(task) }, { vm.delete(task) })
+                    TaskRow(
+                        task = task,
+                        now = now,
+                        isHabit = false,
+                        onClick = { onEdit(task) },
+                        onToggle = { vm.toggleComplete(task) },
+                        onDelete = { vm.delete(task) }
+                    )
                 }
             }
 
@@ -225,66 +276,12 @@ fun TaskListScreen(
     }
 }
 
-@Composable
-private fun NearestBar(nearest: Task?, now: Long) {
-    val containerColor = MaterialTheme.colorScheme.primaryContainer
-    val contentColor = MaterialTheme.colorScheme.onPrimaryContainer
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = containerColor)
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(Icons.Default.Notifications, contentDescription = null, tint = contentColor)
-            Spacer(Modifier.width(12.dp))
-            Column(Modifier.weight(1f)) {
-                if (nearest == null) {
-                    Text("暂无待办", style = MaterialTheme.typography.bodyMedium, color = contentColor)
-                } else {
-                    Text(
-                        "最近：${nearest.title}",
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = contentColor
-                    )
-                    Text(
-                        SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(nearest.dueTime)) +
-                            " · " + formatCountdown(nearest.dueTime - now),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = contentColor
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun QuickAddBar(
-    value: String,
-    onValueChange: (String) -> Unit,
-    onSubmit: () -> Unit
+private fun submitQuick(
+    input: String,
+    onParsed: (NaturalLanguageParser.Parsed) -> Unit
 ) {
-    OutlinedTextField(
-        value = value,
-        onValueChange = onValueChange,
-        modifier = Modifier.fillMaxWidth(),
-        placeholder = { Text("快速添加，比如「今天十点二十洗碗」") },
-        leadingIcon = { Icon(Icons.Default.Add, contentDescription = null) },
-        trailingIcon = {
-            if (value.isNotBlank()) {
-                IconButton(onClick = onSubmit) {
-                    Icon(Icons.Default.Send, contentDescription = "添加")
-                }
-            }
-        },
-        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-        keyboardActions = KeyboardActions(onDone = { onSubmit() }),
-        singleLine = true
-    )
+    val parsed = NaturalLanguageParser.parse(input)
+    if (parsed.title.isNotBlank()) onParsed(parsed)
 }
 
 @Composable
@@ -325,15 +322,28 @@ private fun EmptyHint(text: String) {
 private fun TaskRow(
     task: Task,
     now: Long,
+    isHabit: Boolean,
     onClick: () -> Unit,
     onToggle: () -> Unit,
     onDelete: () -> Unit,
     showCountdown: Boolean = false
 ) {
-    val overdue = !task.isCompleted && task.dueTime < now
+    val todayStart = remember(now) {
+        Calendar.getInstance().apply {
+            timeInMillis = now
+            set(Calendar.HOUR_OF_DAY, 0)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }.timeInMillis
+    }
+
+    val checked = if (isHabit) task.lastCompletedDay == todayStart else task.isCompleted
+    val overdue = !isHabit && !task.isCompleted && task.dueTime < now
+
     val containerColor = when {
         overdue -> MaterialTheme.colorScheme.errorContainer
-        task.isCompleted -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+        checked -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
         else -> MaterialTheme.colorScheme.surfaceVariant
     }
     val textColor = if (overdue) MaterialTheme.colorScheme.onErrorContainer
@@ -350,17 +360,28 @@ private fun TaskRow(
                 .fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Checkbox(checked = task.isCompleted, onCheckedChange = { onToggle() })
+            Checkbox(checked = checked, onCheckedChange = { onToggle() })
             Spacer(Modifier.width(8.dp))
             Column(Modifier.weight(1f)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        task.title,
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = textColor,
+                        textDecoration = if (!isHabit && task.isCompleted)
+                            TextDecoration.LineThrough else null
+                    )
+                    if (isHabit && task.streak > 0) {
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            "🔥${task.streak}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
                 Text(
-                    task.title,
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = textColor,
-                    textDecoration = if (task.isCompleted) TextDecoration.LineThrough else null
-                )
-                Text(
-                    formatTime(task, now, showCountdown),
+                    formatTime(task, now, isHabit, showCountdown),
                     style = MaterialTheme.typography.bodySmall,
                     color = if (overdue) MaterialTheme.colorScheme.onErrorContainer
                     else MaterialTheme.colorScheme.onSurfaceVariant
@@ -381,7 +402,7 @@ private fun TaskRow(
     }
 }
 
-private fun formatTime(task: Task, now: Long, showCountdown: Boolean): String {
+private fun formatTime(task: Task, now: Long, isHabit: Boolean, showCountdown: Boolean): String {
     val timeStr = if (showCountdown) {
         formatCountdown(task.dueTime - now)
     } else {

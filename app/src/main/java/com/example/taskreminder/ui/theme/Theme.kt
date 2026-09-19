@@ -16,15 +16,15 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 private val LightColors = lightColorScheme(
-    primary = Color(0xFF4F6BFF),
+    primary = Color(0xFF4B63F6),
     onPrimary = Color.White,
     primaryContainer = Color(0xFFE6EBFF),
     onPrimaryContainer = Color(0xFF17245C),
-    secondary = Color(0xFF12A594),
+    secondary = Color(0xFF159D8E),
     onSecondary = Color.White,
     secondaryContainer = Color(0xFFD9F7F2),
     onSecondaryContainer = Color(0xFF07473F),
-    tertiary = Color(0xFFFF8A4C),
+    tertiary = Color(0xFFF08C4A),
     onTertiary = Color.White,
     tertiaryContainer = Color(0xFFFFE6D8),
     onTertiaryContainer = Color(0xFF5D2410),
@@ -32,11 +32,11 @@ private val LightColors = lightColorScheme(
     onError = Color.White,
     errorContainer = Color(0xFFFFE7E7),
     onErrorContainer = Color(0xFF6D1A1D),
-    background = Color(0xFFF5F7FB),
+    background = Color(0xFFF7F8FC),
     onBackground = Color(0xFF171A21),
     surface = Color(0xFFFFFFFF),
     onSurface = Color(0xFF171A21),
-    surfaceVariant = Color(0xFFEDF0F6),
+    surfaceVariant = Color(0xFFEEF1F7),
     onSurfaceVariant = Color(0xFF656B78),
     outline = Color(0xFFC7CBD4),
     outlineVariant = Color(0xFFE2E5EB),
@@ -45,7 +45,7 @@ private val LightColors = lightColorScheme(
 )
 
 private val DarkColors = darkColorScheme(
-    primary = Color(0xFF9CB0FF),
+    primary = Color(0xFFA9B8FF),
     onPrimary = Color(0xFF17245C),
     primaryContainer = Color(0xFF34498F),
     onPrimaryContainer = Color(0xFFDDE4FF),
@@ -53,7 +53,7 @@ private val DarkColors = darkColorScheme(
     onSecondary = Color(0xFF003731),
     secondaryContainer = Color(0xFF075E54),
     onSecondaryContainer = Color(0xFFD1F7F1),
-    tertiary = Color(0xFFFFB487),
+    tertiary = Color(0xFFFFB27A),
     onTertiary = Color(0xFF55200A),
     tertiaryContainer = Color(0xFF753514),
     onTertiaryContainer = Color(0xFFFFDCC7),
@@ -61,9 +61,9 @@ private val DarkColors = darkColorScheme(
     onError = Color(0xFF690005),
     errorContainer = Color(0xFF8C1D22),
     onErrorContainer = Color(0xFFFFDAD8),
-    background = Color(0xFF101217),
+    background = Color(0xFF0F1116),
     onBackground = Color(0xFFE6E8ED),
-    surface = Color(0xFF181B22),
+    surface = Color(0xFF191C24),
     onSurface = Color(0xFFE6E8ED),
     surfaceVariant = Color(0xFF252A34),
     onSurfaceVariant = Color(0xFFB8BECA),
@@ -156,6 +156,7 @@ fun AppTheme(content: @Composable () -> Unit) {
         content = content
     )
 }
+
 
 
 

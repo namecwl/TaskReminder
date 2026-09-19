@@ -141,16 +141,23 @@ object NaturalLanguageParser {
             text = text.replace(relativeDay.value, " ")
         }
 
+        // 日期优先于时间解析，并允许省略“日/号”、夹杂空格或使用全角数字。
+        // 例如：九月二十、九月 13 日、9月20、2026年9月20号。
         if (explicitDate == null) {
-            val monthDayRegex = Regex("([一二两三四五六七八九十\\d]{1,3})月([一二两三四五六七八九十\\d]{1,3})[日号]")
+            val monthDayRegex = Regex(
+                "(?:(\\d{4})年)?\\s*" +
+                    "(\\d{1,2}|[一二两三四五六七八九十]{1,3})月\\s*" +
+                    "(\\d{1,2}|[一二两三四五六七八九十]{1,3})(?:日|号)?"
+            )
             val match = monthDayRegex.find(text)
             if (match != null) {
-                explicitDate = dateForMonthDay(
-                    nowMillis,
-                    chineseNumToInt(match.groupValues[1]),
-                    chineseNumToInt(match.groupValues[2])
-                )
-                text = text.replace(match.value, " ")
+                val year = match.groupValues[1].toIntOrNull()
+                val month = chineseNumToInt(match.groupValues[2])
+                val day = chineseNumToInt(match.groupValues[3])
+                if (month in 1..12 && day in 1..31) {
+                    explicitDate = dateForMonthDay(nowMillis, month, day, year)
+                    text = text.replace(match.value, " ")
+                }
             }
         }
 
@@ -166,7 +173,6 @@ object NaturalLanguageParser {
                 }
             }
         }
-
         if (explicitDate == null && repeatRule == RepeatRule.NONE) {
             val weekdayRegex = Regex("(下|这|本)?(?:周|星期|礼拜)([一二三四五六日天])")
             val match = weekdayRegex.find(text)
@@ -241,6 +247,30 @@ object NaturalLanguageParser {
             repeatDaysOfWeek = repeatDaysOfWeek,
             repeatDayOfMonth = repeatDayOfMonth
         )
+    }
+
+    /**
+     * 统一全角数字、全角冒号，并移除“月/日/号/点/时”两侧的意外空格。
+     * 这样可以兼容“九月 13 日”“9 月 20 号”“８点３０分”等输入。
+     */
+    private fun normalizeInput(value: String): String {
+        val normalizedChars = buildString(value.length) {
+            value.forEach { char ->
+                append(
+                    when (char) {
+                        '０' -> '0'; '１' -> '1'; '２' -> '2'; '３' -> '3'; '４' -> '4'
+                        '５' -> '5'; '６' -> '6'; '７' -> '7'; '８' -> '8'; '９' -> '9'
+                        '：' -> ':'
+                        '　' -> ' '
+                        else -> char
+                    }
+                )
+            }
+        }
+        return normalizedChars
+            .replace(Regex("\\s*([年月日号点时])\\s*"), "\$1")
+            .replace(Regex("\\s+"), " ")
+            .trim()
     }
 
     private fun resolveDueTime(
@@ -373,11 +403,16 @@ object NaturalLanguageParser {
         return result
     }
 
-    private fun dateForMonthDay(nowMillis: Long, month: Int, day: Int): Long {
+    private fun dateForMonthDay(
+        nowMillis: Long,
+        month: Int,
+        day: Int,
+        yearOverride: Int? = null
+    ): Long {
         val safeMonth = month.coerceIn(1, 12)
         val now = Calendar.getInstance().apply { timeInMillis = nowMillis }
         val candidate = Calendar.getInstance().apply {
-            set(Calendar.YEAR, now.get(Calendar.YEAR))
+            set(Calendar.YEAR, yearOverride ?: now.get(Calendar.YEAR))
             set(Calendar.MONTH, safeMonth - 1)
             set(Calendar.DAY_OF_MONTH, 1)
             val safeDay = day.coerceIn(1, getActualMaximum(Calendar.DAY_OF_MONTH))
@@ -387,7 +422,7 @@ object NaturalLanguageParser {
             set(Calendar.SECOND, 0)
             set(Calendar.MILLISECOND, 0)
         }
-        if (candidate.timeInMillis < startOfDay(nowMillis)) {
+        if (yearOverride == null && candidate.timeInMillis < startOfDay(nowMillis)) {
             candidate.add(Calendar.YEAR, 1)
         }
         return candidate.timeInMillis
@@ -480,3 +515,6 @@ object NaturalLanguageParser {
         return 0
     }
 }
+
+
+

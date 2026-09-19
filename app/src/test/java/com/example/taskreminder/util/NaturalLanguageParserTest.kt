@@ -44,6 +44,32 @@ class NaturalLanguageParserTest {
     }
 
     @Test
+    fun chineseMonthDayWithoutSuffixIsNotMistakenForTime() {
+        val now = time(2026, Calendar.SEPTEMBER, 19, 10, 0)
+        val parsed = NaturalLanguageParser.parse("九月二十去医院复查", now)
+
+        assertEquals("医院复查", parsed.title)
+        assertDate(parsed.dueTime, 2026, Calendar.SEPTEMBER, 20, 9, 0)
+    }
+
+    @Test
+    fun monthDayWithSpacesAndFullwidthNumberIsParsed() {
+        val now = time(2026, Calendar.SEPTEMBER, 19, 10, 0)
+        val parsed = NaturalLanguageParser.parse("九月 １３ 日去体检", now)
+
+        assertEquals("体检", parsed.title)
+        assertDate(parsed.dueTime, 2027, Calendar.SEPTEMBER, 13, 9, 0)
+    }
+
+    @Test
+    fun numericMonthDayWithoutSuffixIsParsed() {
+        val now = time(2026, Calendar.SEPTEMBER, 19, 10, 0)
+        val parsed = NaturalLanguageParser.parse("9月20交房租", now)
+
+        assertEquals("交房租", parsed.title)
+        assertDate(parsed.dueTime, 2026, Calendar.SEPTEMBER, 20, 9, 0)
+    }
+    @Test
     fun tomorrowAfternoonIsParsedCorrectly() {
         val now = time(2026, Calendar.SEPTEMBER, 19, 10, 0)
         val parsed = NaturalLanguageParser.parse("明天下午三点开会", now)
@@ -103,3 +129,5 @@ class NaturalLanguageParserTest {
         set(Calendar.MILLISECOND, 0)
     }.timeInMillis
 }
+
+

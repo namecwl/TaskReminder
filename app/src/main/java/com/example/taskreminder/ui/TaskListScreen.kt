@@ -2,16 +2,19 @@ package com.example.taskreminder.ui
 
 import android.net.Uri
 import android.widget.Toast
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.*
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -47,15 +50,19 @@ import androidx.compose.material.icons.rounded.UploadFile
 import androidx.compose.material.icons.rounded.Visibility
 import androidx.compose.material.icons.rounded.VisibilityOff
 import androidx.compose.material.icons.rounded.WbSunny
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -74,11 +81,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -88,6 +94,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.taskreminder.alarm.OngoingReminderService
+import com.example.taskreminder.data.MoodStore
 import com.example.taskreminder.data.RepeatRule
 import com.example.taskreminder.data.Task
 import com.example.taskreminder.util.BackupUtil
@@ -106,11 +113,10 @@ import java.util.concurrent.TimeUnit
  *
  * 界面结构参考滴答清单：
  * 1. 顶部显示日期和操作入口。
- * 2. 今日概览展示完成进度。
+ * 2. 今日心情模块可以记录情绪和短日记。
  * 3. 快捷输入支持自然语言添加任务。
  * 4. 任务按今天、打卡、计划和已完成分组展示。
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TaskListScreen(
     vm: TaskViewModel,
@@ -279,7 +285,7 @@ fun TaskListScreen(
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             // 今日概览和快捷输入位于列表顶部，滚动时与任务卡片保持统一节奏。
-            item { TodayOverviewCard(tasks, now) }
+            item { TodayMoodCard() }
 
             item {
                 QuickAddCard(
@@ -350,11 +356,9 @@ fun TaskListScreen(
                 }
             } else {
                 items(groups.habits, key = { "habit_${it.id}" }) { task ->
-                    TaskRow(
+                    HabitRow(
                         task = task,
                         now = now,
-                        isHabit = true,
-                        accent = MaterialTheme.colorScheme.tertiary,
                         onClick = { onEdit(task) },
                         onToggle = { vm.toggleComplete(task) },
                         onDelete = { vm.delete(task) }
@@ -420,28 +424,27 @@ fun TaskListScreen(
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun TodayOverviewCard(tasks: List<Task>, now: Long) {
-    val todayStart = remember(now) { startOfDay(now) }
-    val tomorrowStart = todayStart + 86_400_000L
-    val habitTasks = tasks.filter { it.enabled && !it.isCompleted && it.repeatRule != RepeatRule.NONE }
-    val todayTasks = tasks.filter {
-        it.enabled && it.repeatRule == RepeatRule.NONE &&
-            it.dueTime < tomorrowStart && (it.dueTime >= todayStart || !it.isCompleted)
-    }
-    val total = todayTasks.size + habitTasks.size
-    val done = todayTasks.count { it.isCompleted } +
-        habitTasks.count { it.lastCompletedDay == todayStart }
-    val remaining = (total - done).coerceAtLeast(0)
-    val progress = if (total == 0) 0f else done.toFloat() / total.toFloat()
+private fun TodayMoodCard() {
+    val context = LocalContext.current
+    val savedMood = remember { MoodStore.load(context) }
+    var moodKey by remember { mutableStateOf(savedMood.moodKey) }
+    var note by remember { mutableStateOf(savedMood.note) }
+    var saved by remember { mutableStateOf(savedMood.recorded) }
+
+    val moods = listOf(
+        MoodOption("happy", "😄", "开心", listOf(Color(0xFFFFB74D), Color(0xFFFF8A65))),
+        MoodOption("calm", "😌", "平静", listOf(Color(0xFF5C8DFF), Color(0xFF5BC0BE))),
+        MoodOption("tired", "😴", "疲惫", listOf(Color(0xFF8E9AAF), Color(0xFFB8A1D9))),
+        MoodOption("anxious", "😰", "焦虑", listOf(Color(0xFFF6A84A), Color(0xFFE86A70))),
+        MoodOption("low", "😔", "低落", listOf(Color(0xFF607D9B), Color(0xFF876D9E)))
+    )
+    val selectedMood = moods.firstOrNull { it.key == moodKey } ?: moods[1]
     val gradient = Brush.linearGradient(
-        colors = listOf(
-            MaterialTheme.colorScheme.primary,
-            Color(0xFF6D82FF),
-            MaterialTheme.colorScheme.secondary
-        ),
+        colors = selectedMood.colors,
         start = Offset.Zero,
-        end = Offset(1200f, 500f)
+        end = Offset(1000f, 450f)
     )
 
     Box(
@@ -449,97 +452,125 @@ private fun TodayOverviewCard(tasks: List<Task>, now: Long) {
             .fillMaxWidth()
             .clip(RoundedCornerShape(26.dp))
             .background(gradient)
-            .padding(20.dp)
+            .padding(18.dp)
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        "今日心情",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = Color.White.copy(alpha = 0.84f)
+                    )
+                    Text(
+                        moodPrompt(moodKey),
+                        style = MaterialTheme.typography.headlineSmall,
+                        color = Color.White
+                    )
+                }
                 Text(
-                    "今日概览",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = Color.White.copy(alpha = 0.82f)
+                    selectedMood.emoji,
+                    style = MaterialTheme.typography.displaySmall
                 )
-                Spacer(Modifier.height(5.dp))
-                Text(
-                    when {
-                        total == 0 -> "今天很清爽"
-                        remaining == 0 -> "今天全部完成"
-                        else -> "还有 $remaining 项待完成"
-                    },
-                    style = MaterialTheme.typography.headlineSmall,
-                    color = Color.White
-                )
-                Spacer(Modifier.height(13.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    HeroStat("待办", (total - done).toString())
-                    HeroStat("打卡", habitTasks.size.toString())
-                    HeroStat("完成率", "${(progress * 100).toInt()}%")
+            }
+
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                moods.forEach { mood ->
+                    Surface(
+                        modifier = Modifier.clickable {
+                            moodKey = mood.key
+                            saved = false
+                        },
+                        shape = RoundedCornerShape(14.dp),
+                        color = if (mood.key == moodKey) {
+                            Color.White.copy(alpha = 0.96f)
+                        } else {
+                            Color.White.copy(alpha = 0.16f)
+                        }
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(mood.emoji, style = MaterialTheme.typography.bodyMedium)
+                            Spacer(Modifier.width(5.dp))
+                            Text(
+                                mood.label,
+                                style = MaterialTheme.typography.labelMedium,
+                                color = if (mood.key == moodKey) Color(0xFF30364A) else Color.White
+                            )
+                        }
+                    }
                 }
             }
-            Spacer(Modifier.width(18.dp))
-            ProgressRing(progress = progress, label = "$done/$total")
+
+            OutlinedTextField(
+                value = note,
+                onValueChange = {
+                    note = it
+                    saved = false
+                },
+                modifier = Modifier.fillMaxWidth(),
+                placeholder = { Text("写几句今天的心情或发生的事…") },
+                minLines = 3,
+                maxLines = 5,
+                shape = RoundedCornerShape(16.dp),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedContainerColor = Color.White.copy(alpha = 0.94f),
+                    unfocusedContainerColor = Color.White.copy(alpha = 0.88f),
+                    focusedBorderColor = Color.White,
+                    unfocusedBorderColor = Color.White.copy(alpha = 0.55f)
+                )
+            )
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    if (saved) "已记录今天的心情" else "记录只保存在本机",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color.White.copy(alpha = 0.78f),
+                    modifier = Modifier.weight(1f)
+                )
+                Button(
+                    onClick = {
+                        MoodStore.save(context, moodKey, note)
+                        saved = true
+                    },
+                    shape = RoundedCornerShape(14.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color.White,
+                        contentColor = selectedMood.colors.first()
+                    )
+                ) {
+                    Text(if (saved) "已保存" else "保存心情")
+                }
+            }
         }
     }
 }
 
-@Composable
-private fun HeroStat(label: String, value: String) {
-    Surface(
-        shape = RoundedCornerShape(12.dp),
-        color = Color.White.copy(alpha = 0.14f)
-    ) {
-        Column(
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Text(
-                value,
-                style = MaterialTheme.typography.labelLarge,
-                color = Color.White
-            )
-            Text(
-                label,
-                style = MaterialTheme.typography.bodySmall,
-                color = Color.White.copy(alpha = 0.75f)
-            )
-        }
-    }
-}
+private data class MoodOption(
+    val key: String,
+    val emoji: String,
+    val label: String,
+    val colors: List<Color>
+)
 
-@Composable
-private fun ProgressRing(progress: Float, label: String) {
-    Box(
-        modifier = Modifier.size(76.dp),
-        contentAlignment = Alignment.Center
-    ) {
-        Canvas(modifier = Modifier.fillMaxSize()) {
-            val stroke = 7.dp.toPx()
-            drawArc(
-                color = Color.White.copy(alpha = 0.22f),
-                startAngle = -90f,
-                sweepAngle = 360f,
-                useCenter = false,
-                style = Stroke(width = stroke, cap = StrokeCap.Round)
-            )
-            drawArc(
-                color = Color.White,
-                startAngle = -90f,
-                sweepAngle = 360f * progress.coerceIn(0f, 1f),
-                useCenter = false,
-                style = Stroke(width = stroke, cap = StrokeCap.Round)
-            )
-        }
-        Text(
-            label,
-            style = MaterialTheme.typography.labelLarge,
-            color = Color.White,
-            fontWeight = FontWeight.Bold
-        )
-    }
+private fun moodPrompt(moodKey: String): String = when (moodKey) {
+    "happy" -> "今天真不错，保持这份开心"
+    "tired" -> "辛苦了，给自己一点休息时间"
+    "anxious" -> "慢慢来，一件一件处理"
+    "low" -> "允许自己低落一会儿，明天再出发"
+    else -> "今天感觉怎么样？"
 }
-
 @Composable
 private fun QuickAddCard(
     value: String,
@@ -768,6 +799,206 @@ private fun EmptyState(icon: ImageVector, title: String, subtitle: String) {
 }
 
 @Composable
+private fun HabitRow(
+    task: Task,
+    now: Long,
+    onClick: () -> Unit,
+    onToggle: () -> Unit,
+    onDelete: () -> Unit
+) {
+    val todayStart = remember(now) { startOfDay(now) }
+    val checked = task.lastCompletedDay == todayStart
+    val streak = task.streak.coerceAtLeast(0)
+    val nextMilestone = habitNextMilestone(streak)
+    val progress = (streak.toFloat() / nextMilestone.toFloat()).coerceIn(0f, 1f)
+    val animatedProgress by animateFloatAsState(
+        targetValue = progress,
+        animationSpec = tween(durationMillis = 700),
+        label = "habitProgress"
+    )
+    val pulse by rememberInfiniteTransition(label = "habitPulse").animateFloat(
+        initialValue = 1f,
+        targetValue = 1.12f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 850),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "habitPulseScale"
+    )
+    var menuOpen by remember { mutableStateOf(false) }
+    val accent = MaterialTheme.colorScheme.tertiary
+
+    Card(
+        onClick = onClick,
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(22.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = if (checked) {
+                MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.55f)
+            } else {
+                MaterialTheme.colorScheme.surface
+            }
+        ),
+        border = BorderStroke(1.dp, accent.copy(alpha = if (checked) 0.42f else 0.20f)),
+        elevation = CardDefaults.cardElevation(defaultElevation = if (checked) 2.dp else 0.dp)
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Surface(
+                    modifier = Modifier
+                        .size(48.dp)
+                        .scale(if (checked) pulse else 1f),
+                    shape = CircleShape,
+                    color = accent.copy(alpha = 0.14f)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            Icons.Rounded.LocalFireDepartment,
+                            contentDescription = null,
+                            tint = accent,
+                            modifier = Modifier.size(26.dp)
+                        )
+                    }
+                }
+                Spacer(Modifier.width(12.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        task.title.ifBlank { "习惯打卡" },
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        habitLevel(streak),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = accent,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+                Box {
+                    IconButton(onClick = { menuOpen = true }, modifier = Modifier.size(38.dp)) {
+                        Icon(
+                            Icons.Rounded.MoreVert,
+                            contentDescription = "习惯操作",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    DropdownMenu(
+                        expanded = menuOpen,
+                        onDismissRequest = { menuOpen = false }
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("编辑") },
+                            leadingIcon = { Icon(Icons.Rounded.Edit, null) },
+                            onClick = {
+                                menuOpen = false
+                                onClick()
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("删除") },
+                            leadingIcon = { Icon(Icons.Rounded.Delete, null) },
+                            onClick = {
+                                menuOpen = false
+                                onDelete()
+                            }
+                        )
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(14.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    "连续 $streak 天",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Spacer(Modifier.weight(1f))
+                Text(
+                    "下一目标 $nextMilestone 天",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Spacer(Modifier.height(8.dp))
+            LinearProgressIndicator(
+                progress = animatedProgress,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(8.dp)
+                    .clip(CircleShape),
+                color = accent,
+                trackColor = accent.copy(alpha = 0.14f)
+            )
+            Spacer(Modifier.height(12.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                AnimatedVisibility(visible = checked) {
+                    Surface(
+                        shape = CircleShape,
+                        color = MaterialTheme.colorScheme.secondaryContainer
+                    ) {
+                        Text(
+                            "今日 +1",
+                            modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer
+                        )
+                    }
+                }
+                Spacer(Modifier.weight(1f))
+                Button(
+                    onClick = onToggle,
+                    shape = RoundedCornerShape(14.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (checked) {
+                            MaterialTheme.colorScheme.secondary
+                        } else {
+                            accent
+                        }
+                    )
+                ) {
+                    Text(if (checked) "已完成" else "今日打卡")
+                }
+            }
+            Spacer(Modifier.height(8.dp))
+            Text(
+                habitEncouragement(streak, checked, nextMilestone),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+private fun habitNextMilestone(streak: Int): Int {
+    val milestones = listOf(3, 7, 14, 30, 60, 100)
+    return milestones.firstOrNull { it > streak } ?: (((streak / 50) + 1) * 50)
+}
+
+private fun habitLevel(streak: Int): String = when {
+    streak >= 100 -> "习惯之神 · 100 天以上"
+    streak >= 60 -> "传奇习惯 · 60 天以上"
+    streak >= 30 -> "自律大师 · 30 天以上"
+    streak >= 14 -> "习惯达人 · 14 天以上"
+    streak >= 7 -> "自律新星 · 7 天以上"
+    streak >= 3 -> "坚持者 · 3 天以上"
+    streak >= 1 -> "小火苗 · 已经出发"
+    else -> "启程 · 今天开始"
+}
+
+private fun habitEncouragement(streak: Int, checked: Boolean, nextMilestone: Int): String = when {
+    checked && streak > 0 -> "今天也完成了，连续 $streak 天，继续保持！"
+    streak == 0 -> "完成第一次打卡，点亮你的持续记录。"
+    streak >= nextMilestone -> "新的里程碑已经解锁！"
+    else -> "再坚持 ${(nextMilestone - streak).coerceAtLeast(1)} 天，解锁下一个成就。"
+}
+@Composable
 private fun TaskRow(
     task: Task,
     now: Long,
@@ -778,7 +1009,6 @@ private fun TaskRow(
     onDelete: () -> Unit,
     showCountdown: Boolean = false
 ) {
-    var menuOpen by remember { mutableStateOf(false) }
     val todayStart = remember(now) { startOfDay(now) }
     val checked = if (isHabit) task.lastCompletedDay == todayStart else task.isCompleted
     val overdue = !isHabit && !task.isCompleted && task.dueTime < now
@@ -1062,6 +1292,15 @@ private fun groupTasks(tasks: List<Task>, now: Long): Groups {
 
     return Groups(habits, today, future, completed)
 }
+
+
+
+
+
+
+
+
+
 
 
 

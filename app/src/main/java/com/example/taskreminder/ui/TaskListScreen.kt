@@ -979,6 +979,7 @@ private fun TaskRow(
     showCountdown: Boolean = false
 ) {
     val todayStart = remember(now) { startOfDay(now) }
+    var menuOpen by remember { mutableStateOf(false) }
     val checked = if (isHabit) task.lastCompletedDay == todayStart else task.isCompleted
     val overdue = !isHabit && !task.isCompleted && task.dueTime < now
     val meta = formatTaskMeta(task, now, isHabit, showCountdown)

@@ -84,7 +84,7 @@ fun TaskEditScreen(
     onCancel: () -> Unit
 ) {
     val context = LocalContext.current
-    val isNew = task == null
+    val isNew = task == null || task.id == 0L
 
     var title by remember { mutableStateOf(task?.title ?: "") }
     var note by remember { mutableStateOf(task?.note ?: "") }
@@ -207,6 +207,26 @@ fun TaskEditScreen(
                 title = "提醒时间",
                 subtitle = "到点后按通知设置提醒"
             ) {
+                val quickDates = listOf(
+                    "今天" to 0,
+                    "明天" to 1,
+                    "后天" to 2,
+                    "一周后" to 7
+                )
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    quickDates.forEach { (label, offset) ->
+                        val target = shiftDay(dueTime, offset)
+                        FilterChip(
+                            selected = isSameDay(dueTime, target),
+                            onClick = { dueTime = shiftDay(dueTime, offset) },
+                            label = { Text(label) }
+                        )
+                    }
+                }
+                Spacer(Modifier.height(10.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     PickerTile(
                         icon = Icons.Rounded.CalendarMonth,
@@ -505,6 +525,22 @@ private fun PickerTile(
     }
 }
 
+private fun isSameDay(first: Long, second: Long): Boolean =
+    dayStart(first) == dayStart(second)
+
+private fun shiftDay(time: Long, offsetDays: Int): Long = Calendar.getInstance().apply {
+    timeInMillis = time
+    add(Calendar.DAY_OF_YEAR, offsetDays)
+}.timeInMillis
+
+private fun dayStart(time: Long): Long = Calendar.getInstance().apply {
+    timeInMillis = time
+    set(Calendar.HOUR_OF_DAY, 0)
+    set(Calendar.MINUTE, 0)
+    set(Calendar.SECOND, 0)
+    set(Calendar.MILLISECOND, 0)
+}.timeInMillis
+
 private fun defaultDueTime(): Long {
     val calendar = Calendar.getInstance()
     calendar.add(Calendar.HOUR_OF_DAY, 1)
@@ -513,6 +549,9 @@ private fun defaultDueTime(): Long {
     calendar.set(Calendar.MILLISECOND, 0)
     return calendar.timeInMillis
 }
+
+
+
 
 
 

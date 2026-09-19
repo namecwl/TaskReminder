@@ -25,6 +25,9 @@ jobs:
           unzip -q gradle-8.7-bin.zip
           echo "$PWD/gradle-8.7/bin" >> $GITHUB_PATH
 
+      - name: Run Unit Tests
+        run: gradle testDebugUnitTest --no-daemon
+
       - name: Build Release APK
         run: gradle assembleRelease --no-daemon
 
@@ -33,4 +36,5 @@ jobs:
         with:
           name: TaskReminder-APK
           path: app/build/outputs/apk/release/*.apk
+
 

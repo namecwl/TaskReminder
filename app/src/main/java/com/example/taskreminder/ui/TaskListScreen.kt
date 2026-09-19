@@ -35,19 +35,20 @@ import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.CleaningServices
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Download
+import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.LocalFireDepartment
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.NotificationsActive
 import androidx.compose.material.icons.rounded.Repeat
 import androidx.compose.material.icons.rounded.Schedule
 import androidx.compose.material.icons.rounded.Send
+import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material.icons.rounded.UploadFile
 import androidx.compose.material.icons.rounded.Visibility
 import androidx.compose.material.icons.rounded.VisibilityOff
 import androidx.compose.material.icons.rounded.WbSunny
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExtendedFloatingActionButton
@@ -57,6 +58,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TopAppBar
@@ -107,7 +109,6 @@ import java.util.concurrent.TimeUnit
  * 3. 快捷输入支持自然语言添加任务。
  * 4. 任务按今天、打卡、计划和已完成分组展示。
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TaskListScreen(
     vm: TaskViewModel,
@@ -162,18 +163,16 @@ fun TaskListScreen(
     }
 
     val groups = remember(tasks, now) { groupTasks(tasks, now) }
-    val addQuickTask: (NaturalLanguageParser.Parsed) -> Unit = { parsed ->
-        vm.save(
-            Task(
-                title = parsed.title,
-                note = "",
-                dueTime = parsed.dueTime,
-                repeatRule = parsed.repeatRule,
-                repeatInterval = parsed.repeatInterval,
-                repeatDaysOfWeek = parsed.repeatDaysOfWeek,
-                repeatDayOfMonth = parsed.repeatDayOfMonth,
-                advanceMinutes = 5
-            )
+    val taskFromParsed: (NaturalLanguageParser.Parsed) -> Task = { parsed ->
+        Task(
+            title = parsed.title,
+            note = "",
+            dueTime = parsed.dueTime,
+            repeatRule = parsed.repeatRule,
+            repeatInterval = parsed.repeatInterval,
+            repeatDaysOfWeek = parsed.repeatDaysOfWeek,
+            repeatDayOfMonth = parsed.repeatDayOfMonth,
+            advanceMinutes = 5
         )
     }
 
@@ -284,8 +283,12 @@ fun TaskListScreen(
                 QuickAddCard(
                     value = quickInput,
                     onValueChange = { quickInput = it },
-                    onAdd = {
-                        submitQuick(quickInput, addQuickTask)
+                    onAdd = { parsed ->
+                        vm.save(taskFromParsed(parsed))
+                        quickInput = ""
+                    },
+                    onDetails = { parsed ->
+                        onEdit(taskFromParsed(parsed))
                         quickInput = ""
                     }
                 )
@@ -539,8 +542,13 @@ private fun ProgressRing(progress: Float, label: String) {
 private fun QuickAddCard(
     value: String,
     onValueChange: (String) -> Unit,
-    onAdd: () -> Unit
+    onAdd: (NaturalLanguageParser.Parsed) -> Unit,
+    onDetails: (NaturalLanguageParser.Parsed) -> Unit
 ) {
+    val preview = remember(value) {
+        value.trim().takeIf { it.isNotEmpty() }?.let { NaturalLanguageParser.parse(it) }
+    }
+
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(22.dp),
@@ -548,68 +556,115 @@ private fun QuickAddCard(
         shadowElevation = 5.dp,
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.65f))
     ) {
-        Row(
-            modifier = Modifier.padding(start = 12.dp, end = 8.dp, top = 4.dp, bottom = 4.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(
-                Icons.Rounded.AutoAwesome,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(22.dp)
-            )
-            TextField(
-                value = value,
-                onValueChange = onValueChange,
-                modifier = Modifier.weight(1f),
-                placeholder = {
-                    Text(
-                        "一句话记一下，例如「今天十点二十洗碗」",
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                },
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                keyboardActions = KeyboardActions(onDone = { onAdd() }),
-                colors = TextFieldDefaults.colors(
-                    focusedContainerColor = Color.Transparent,
-                    unfocusedContainerColor = Color.Transparent,
-                    disabledContainerColor = Color.Transparent,
-                    focusedIndicatorColor = Color.Transparent,
-                    unfocusedIndicatorColor = Color.Transparent,
-                    disabledIndicatorColor = Color.Transparent
-                )
-            )
-            Surface(
-                modifier = Modifier
-                    .size(40.dp)
-                    .clip(CircleShape)
-                    .clickable(enabled = value.isNotBlank(), onClick = onAdd),
-                shape = CircleShape,
-                color = if (value.isNotBlank()) {
-                    MaterialTheme.colorScheme.primary
-                } else {
-                    MaterialTheme.colorScheme.surfaceVariant
-                }
+        Column {
+            Row(
+                modifier = Modifier.padding(start = 12.dp, end = 8.dp, top = 4.dp, bottom = 4.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        Icons.Rounded.Send,
-                        contentDescription = "添加",
-                        tint = if (value.isNotBlank()) {
-                            MaterialTheme.colorScheme.onPrimary
-                        } else {
-                            MaterialTheme.colorScheme.onSurfaceVariant
-                        },
-                        modifier = Modifier.size(18.dp)
+                Icon(
+                    Icons.Rounded.AutoAwesome,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(22.dp)
+                )
+                TextField(
+                    value = value,
+                    onValueChange = onValueChange,
+                    modifier = Modifier.weight(1f),
+                    placeholder = {
+                        Text(
+                            "一句话记一下，例如「晚上8点去吃饭」",
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                    keyboardActions = KeyboardActions(
+                        onDone = {
+                            preview?.takeIf { it.title.isNotBlank() }?.let(onAdd)
+                        }
+                    ),
+                    colors = TextFieldDefaults.colors(
+                        focusedContainerColor = Color.Transparent,
+                        unfocusedContainerColor = Color.Transparent,
+                        disabledContainerColor = Color.Transparent,
+                        focusedIndicatorColor = Color.Transparent,
+                        unfocusedIndicatorColor = Color.Transparent,
+                        disabledIndicatorColor = Color.Transparent
                     )
+                )
+                Surface(
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clip(CircleShape)
+                        .clickable(
+                            enabled = preview?.title?.isNotBlank() == true,
+                            onClick = { preview?.let(onAdd) }
+                        ),
+                    shape = CircleShape,
+                    color = if (preview?.title?.isNotBlank() == true) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.surfaceVariant
+                    }
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            Icons.Rounded.Send,
+                            contentDescription = "添加",
+                            tint = if (preview?.title?.isNotBlank() == true) {
+                                MaterialTheme.colorScheme.onPrimary
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            },
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
+            }
+
+            if (preview != null) {
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 44.dp, end = 12.dp, bottom = 10.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(start = 12.dp, end = 6.dp, top = 4.dp, bottom = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                "将添加：${preview.title}",
+                                style = MaterialTheme.typography.labelLarge,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Text(
+                                formatParsedPreview(preview),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.78f)
+                            )
+                        }
+                        TextButton(onClick = { onDetails(preview) }) {
+                            Icon(
+                                Icons.Rounded.Tune,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(Modifier.width(4.dp))
+                            Text("调整")
+                        }
+                    }
                 }
             }
         }
     }
 }
-
 @Composable
 private fun SectionHeader(
     title: String,
@@ -752,24 +807,30 @@ private fun TaskRow(
         ) {
             Box(
                 modifier = Modifier
-                    .size(25.dp)
-                    .clip(CircleShape)
-                    .background(if (checked) accent else Color.Transparent)
-                    .border(
-                        width = 2.dp,
-                        color = if (checked) accent else accent.copy(alpha = 0.55f),
-                        shape = CircleShape
-                    )
+                    .size(40.dp)
                     .clickable(onClick = onToggle),
                 contentAlignment = Alignment.Center
             ) {
-                if (checked) {
-                    Icon(
-                        Icons.Rounded.Check,
-                        contentDescription = "取消完成",
-                        tint = Color.White,
-                        modifier = Modifier.size(16.dp)
-                    )
+                Box(
+                    modifier = Modifier
+                        .size(25.dp)
+                        .clip(CircleShape)
+                        .background(if (checked) accent else Color.Transparent)
+                        .border(
+                            width = 2.dp,
+                            color = if (checked) accent else accent.copy(alpha = 0.55f),
+                            shape = CircleShape
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (checked) {
+                        Icon(
+                            Icons.Rounded.Check,
+                            contentDescription = "取消完成",
+                            tint = Color.White,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
                 }
             }
 
@@ -848,28 +909,63 @@ private fun TaskRow(
                 }
             }
 
-            IconButton(
-                onClick = onDelete,
-                modifier = Modifier.size(38.dp)
-            ) {
-                Icon(
-                    Icons.Rounded.Delete,
-                    contentDescription = "删除",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f),
-                    modifier = Modifier.size(19.dp)
-                )
+            Box {
+                IconButton(
+                    onClick = { menuOpen = true },
+                    modifier = Modifier.size(38.dp)
+                ) {
+                    Icon(
+                        Icons.Rounded.MoreVert,
+                        contentDescription = "任务操作",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.62f),
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+                DropdownMenu(
+                    expanded = menuOpen,
+                    onDismissRequest = { menuOpen = false }
+                ) {
+                    DropdownMenuItem(
+                        text = { Text("编辑") },
+                        leadingIcon = { Icon(Icons.Rounded.Edit, null) },
+                        onClick = {
+                            menuOpen = false
+                            onClick()
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("删除") },
+                        leadingIcon = { Icon(Icons.Rounded.Delete, null) },
+                        onClick = {
+                            menuOpen = false
+                            onDelete()
+                        }
+                    )
+                }
             }
         }
     }
 }
 
-private fun submitQuick(
-    input: String,
-    onParsed: (NaturalLanguageParser.Parsed) -> Unit
-) {
-    if (input.isBlank()) return
-    val parsed = NaturalLanguageParser.parse(input)
-    if (parsed.title.isNotBlank()) onParsed(parsed)
+private fun formatParsedPreview(parsed: NaturalLanguageParser.Parsed): String {
+    val todayStart = startOfDay(System.currentTimeMillis())
+    val dueStart = startOfDay(parsed.dueTime)
+    val dayLabel = when (dueStart) {
+        todayStart -> "今天"
+        todayStart + 86_400_000L -> "明天"
+        todayStart + 2 * 86_400_000L -> "后天"
+        else -> SimpleDateFormat("M月d日", Locale.SIMPLIFIED_CHINESE).format(Date(parsed.dueTime))
+    }
+    val timeLabel = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(parsed.dueTime))
+    val repeatLabel = when (parsed.repeatRule) {
+        RepeatRule.DAILY -> " · 每天重复"
+        RepeatRule.WEEKDAY -> " · 工作日重复"
+        RepeatRule.WEEKLY -> " · 每周重复"
+        RepeatRule.MONTHLY -> " · 每月${parsed.repeatDayOfMonth}号"
+        RepeatRule.INTERVAL -> " · 每隔${parsed.repeatInterval}天"
+        else -> ""
+    }
+    return "$dayLabel $timeLabel$repeatLabel"
 }
 
 private fun friendlyToday(): String {
@@ -963,6 +1059,17 @@ private fun groupTasks(tasks: List<Task>, now: Long): Groups {
 
     return Groups(habits, today, future, completed)
 }
+
+
+
+
+
+
+
+
+
+
+
 
 
 

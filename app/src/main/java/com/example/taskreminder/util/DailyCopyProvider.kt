@@ -160,7 +160,7 @@ object DailyCopyProvider {
         )
         return if (name in solarTerms) {
             listOf(
-                "$name至，四时流转。愿你顺应节气，安顿身心，从容生活。",
+                "${name}至，四时流转。愿你顺应节气，安顿身心，从容生活。",
                 "今日$name，风物有序。愿你在季节更迭里，收获属于自己的安宁。"
             )
         } else {

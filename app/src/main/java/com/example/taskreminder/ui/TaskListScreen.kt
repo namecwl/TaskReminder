@@ -764,6 +764,7 @@ private fun HabitRow(
                     contentAlignment = Alignment.Center
                 ) {
                     Canvas(modifier = Modifier.fillMaxSize()) {
+                    val errorColor = MaterialTheme.colorScheme.error
                         val stroke = 5.dp.toPx()
                         drawArc(
                             color = accent.copy(alpha = 0.14f),

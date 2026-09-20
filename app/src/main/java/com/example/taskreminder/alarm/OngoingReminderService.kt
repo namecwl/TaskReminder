@@ -8,7 +8,6 @@ import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
-import com.example.taskreminder.data.TaskDatabase
 import com.example.taskreminder.util.OngoingNotifier
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -16,21 +15,19 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.catch
-import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import java.util.Calendar
 
 /**
  * 通知栏常驻前台服务。
  *
- * 该服务与数据库 Flow 保持连接，任务新增、完成、删除后会立即刷新通知；
- * 同时使用一分钟心跳刷新倒计时。START_STICKY 用于让系统在服务被回收后尽量恢复。
+ * 通知内容只显示当天文案：节日优先使用节日诗词/祝福，普通日期使用本地好句。
+ * 服务在跨过零点后自动更新为下一天内容。
  */
 class OngoingReminderService : Service() {
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
-    private var collectJob: Job? = null
+    private var updateJob: Job? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -38,9 +35,7 @@ class OngoingReminderService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        // Android 要求 startForegroundService 后必须尽快调用 startForeground。
-        // 首次先显示占位内容，随后数据库 Flow 会立即替换为真实任务。
-        val initialNotification = OngoingNotifier.build(this, emptyList())
+        val initialNotification = OngoingNotifier.build(this)
         try {
             startForeground(OngoingNotifier.NOTIFICATION_ID, initialNotification)
         } catch (_: Exception) {
@@ -48,39 +43,43 @@ class OngoingReminderService : Service() {
             return START_NOT_STICKY
         }
 
-        if (collectJob?.isActive != true) {
-            collectJob = serviceScope.launch {
-                val tasks = TaskDatabase.getInstance(applicationContext).taskDao().observeAll()
-                // 数据库变化负责即时刷新，分钟心跳负责更新“还有多久”。
-                val minuteTicker = flow {
-                    while (true) {
-                        emit(Unit)
-                        delay(60_000L)
+        if (updateJob?.isActive != true) {
+            updateJob = serviceScope.launch {
+                while (isActive) {
+                    val waitMillis = millisUntilNextDay() + 1_000L
+                    delay(waitMillis)
+                    val notification = OngoingNotifier.build(applicationContext)
+                    try {
+                        NotificationManagerCompat.from(applicationContext)
+                            .notify(OngoingNotifier.NOTIFICATION_ID, notification)
+                    } catch (_: SecurityException) {
+                        // Notification permission may have been revoked.
                     }
                 }
-                combine(tasks, minuteTicker) { latestTasks, _ -> latestTasks }
-                    .catch { }
-                    .collectLatest { latestTasks ->
-                        val notification = OngoingNotifier.build(applicationContext, latestTasks)
-                        try {
-                            NotificationManagerCompat.from(applicationContext)
-                                .notify(OngoingNotifier.NOTIFICATION_ID, notification)
-                        } catch (_: SecurityException) {
-                            // Notification permission may have been revoked.
-                        }
-                    }
             }
         }
         return START_STICKY
     }
 
     override fun onDestroy() {
-        collectJob?.cancel()
+        updateJob?.cancel()
         serviceScope.cancel()
         super.onDestroy()
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
+
+    private fun millisUntilNextDay(): Long = Calendar.getInstance().run {
+        val now = timeInMillis
+        val next = (clone() as Calendar).apply {
+            add(Calendar.DAY_OF_YEAR, 1)
+            set(Calendar.HOUR_OF_DAY, 0)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }
+        (next.timeInMillis - now).coerceAtLeast(1_000L)
+    }
 
     companion object {
         /** 在通知权限和常驻通道可用时启动前台服务。 */
@@ -110,7 +109,4 @@ class OngoingReminderService : Service() {
         }
     }
 }
-
-
-
 

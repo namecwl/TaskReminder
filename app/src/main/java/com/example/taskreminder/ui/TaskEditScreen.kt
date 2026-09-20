@@ -113,6 +113,13 @@ fun TaskEditScreen(
             } else {
                 (streakInput.toIntOrNull() ?: 0).coerceAtLeast(0)
             }
+            val newTotal = if (repeatRule == RepeatRule.NONE) {
+                0
+            } else if (task != null && newStreak == task.streak) {
+                task.totalCompletions.coerceAtLeast(newStreak)
+            } else {
+                newStreak
+            }
             val existingLastDay = task?.lastCompletedDay ?: 0L
             val newLastCompletedDay = when {
                 repeatRule == RepeatRule.NONE -> 0L
@@ -134,6 +141,7 @@ fun TaskEditScreen(
                     completedAt = null,
                     enabled = true,
                     streak = newStreak,
+                    totalCompletions = newTotal,
                     lastCompletedDay = newLastCompletedDay
                 )
             )
@@ -364,7 +372,7 @@ fun TaskEditScreen(
                     OutlinedTextField(
                         value = streakInput,
                         onValueChange = { streakInput = it.filter { char -> char.isDigit() } },
-                        label = { Text("已坚持天数") },
+                        label = { Text("累计打卡天数") },
                         placeholder = { Text("例如：30") },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                         singleLine = true,
@@ -596,6 +604,9 @@ private fun defaultDueTime(): Long {
     calendar.set(Calendar.MILLISECOND, 0)
     return calendar.timeInMillis
 }
+
+
+
 
 
 

@@ -12,6 +12,9 @@ interface TaskDao {
     @Query("SELECT * FROM tasks ORDER BY isCompleted ASC, dueTime ASC")
     fun observeAll(): Flow<List<Task>>
 
+    @Query("SELECT * FROM tasks ORDER BY dueTime ASC")
+    suspend fun getAll(): List<Task>
+
     @Query("SELECT * FROM tasks WHERE enabled = 1 AND isCompleted = 0")
     suspend fun getAllEnabled(): List<Task>
 
@@ -30,3 +33,4 @@ interface TaskDao {
     @Query("DELETE FROM tasks WHERE isCompleted = 1")
     suspend fun clearCompleted()
 }
+

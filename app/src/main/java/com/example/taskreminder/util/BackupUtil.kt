@@ -25,6 +25,7 @@ object BackupUtil {
                 put("createdAt", t.createdAt)
                 put("enabled", t.enabled)
                 put("streak", t.streak)
+                put("totalCompletions", t.totalCompletions)
                 put("lastCompletedDay", t.lastCompletedDay)
             })
         }
@@ -57,6 +58,7 @@ object BackupUtil {
                     createdAt = o.optLong("createdAt", System.currentTimeMillis()),
                     enabled = o.optBoolean("enabled", true),
                     streak = o.optInt("streak", 0),
+                    totalCompletions = o.optInt("totalCompletions", o.optInt("streak", 0)),
                     lastCompletedDay = o.optLong("lastCompletedDay", 0L)
                 )
             )
@@ -75,3 +77,5 @@ object BackupUtil {
             it.readBytes().toString(Charsets.UTF_8)
         } ?: ""
 }
+
+

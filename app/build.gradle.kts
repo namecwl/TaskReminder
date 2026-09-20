@@ -12,8 +12,8 @@ android {
         applicationId = "com.example.taskreminder"
         minSdk = 26
         targetSdk = 34
-        versionCode = 5
-        versionName = "2.3"
+        versionCode = 7
+        versionName = "2.5"
     }
 
     buildTypes {
@@ -65,6 +65,8 @@ dependencies {
 
     debugImplementation("androidx.compose.ui:ui-tooling")
 }
+
+
 
 
 

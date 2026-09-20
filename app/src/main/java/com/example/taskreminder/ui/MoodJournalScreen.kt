@@ -75,10 +75,20 @@ internal data class MoodOption(
 
 internal val moodOptions = listOf(
     MoodOption("happy", "😄", "开心", listOf(Color(0xFFFFB74D), Color(0xFFFF8A65))),
+    MoodOption("excited", "🤩", "兴奋", listOf(Color(0xFFFF7A59), Color(0xFFFFB347))),
     MoodOption("calm", "😌", "平静", listOf(Color(0xFF5C8DFF), Color(0xFF5BC0BE))),
+    MoodOption("grateful", "🥰", "感激", listOf(Color(0xFFFF8FA3), Color(0xFFFFB4A2))),
+    MoodOption("hopeful", "🌱", "期待", listOf(Color(0xFF46B98A), Color(0xFF8BD3A8))),
     MoodOption("tired", "😴", "疲惫", listOf(Color(0xFF8E9AAF), Color(0xFFB8A1D9))),
     MoodOption("anxious", "😰", "焦虑", listOf(Color(0xFFF6A84A), Color(0xFFE86A70))),
-    MoodOption("low", "😔", "低落", listOf(Color(0xFF607D9B), Color(0xFF876D9E)))
+    MoodOption("annoyed", "😤", "烦闷", listOf(Color(0xFFE58B52), Color(0xFFC96A6A))),
+    MoodOption("angry", "😠", "生气", listOf(Color(0xFFE05252), Color(0xFFB72E4A))),
+    MoodOption("low", "😔", "低落", listOf(Color(0xFF607D9B), Color(0xFF876D9E))),
+    MoodOption("sad", "😢", "难过", listOf(Color(0xFF5C78A8), Color(0xFF7B8FC7))),
+    MoodOption("lonely", "🌙", "孤独", listOf(Color(0xFF586B9C), Color(0xFF7B6FA8))),
+    MoodOption("confused", "😕", "迷茫", listOf(Color(0xFF8994A6), Color(0xFFA79BC4))),
+    MoodOption("shy", "😳", "害羞", listOf(Color(0xFFFF9FAE), Color(0xFFE7A0D0))),
+    MoodOption("neutral", "😐", "一般", listOf(Color(0xFF8C99A8), Color(0xFFA6B0BC)))
 )
 
 internal fun moodOption(key: String): MoodOption =
@@ -440,9 +450,19 @@ private fun MoodHistoryCard(entry: MoodEntry, onDelete: () -> Unit) {
 
 private fun moodPrompt(key: String): String = when (key) {
     "happy" -> "今天真不错，保持这份开心"
+    "excited" -> "把这份能量，变成今天的动力"
+    "grateful" -> "记得把温柔和感谢说出来"
+    "hopeful" -> "心里有期待，日子就有方向"
     "tired" -> "辛苦了，给自己一点休息时间"
     "anxious" -> "慢慢来，一件一件处理"
+    "annoyed" -> "先深呼吸，把烦恼放轻一点"
+    "angry" -> "允许生气，但别让它伤到自己"
     "low" -> "允许自己低落一会儿，明天再出发"
+    "sad" -> "难过也没关系，先陪陪自己"
+    "lonely" -> "一个人的时候，也值得被好好照顾"
+    "confused" -> "看不清路时，就先走好眼前一步"
+    "shy" -> "害羞也是可爱的一部分"
+    "neutral" -> "普通的一天，也值得认真记录"
     else -> "今天感觉怎么样？"
 }
 
@@ -468,3 +488,5 @@ private fun startOfDay(time: Long): Long = Calendar.getInstance().apply {
     set(Calendar.SECOND, 0)
     set(Calendar.MILLISECOND, 0)
 }.timeInMillis
+
+

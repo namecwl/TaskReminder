@@ -26,9 +26,13 @@ interface MoodDao {
     @Query("SELECT * FROM mood_entries ORDER BY createdAt DESC")
     fun observeAll(): Flow<List<MoodEntry>>
 
+    @Query("SELECT * FROM mood_entries ORDER BY createdAt ASC")
+    suspend fun getAll(): List<MoodEntry>
+
     @Insert
     suspend fun insert(entry: MoodEntry): Long
 
     @Delete
     suspend fun delete(entry: MoodEntry)
 }
+

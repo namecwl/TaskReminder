@@ -3,12 +3,16 @@ package com.example.taskreminder.vm
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.room.withTransaction
 import com.example.taskreminder.alarm.AlarmScheduler
 import com.example.taskreminder.data.HabitCheckIn
 import com.example.taskreminder.data.HabitStatus
 import com.example.taskreminder.data.RepeatRule
 import com.example.taskreminder.data.Task
 import com.example.taskreminder.data.TaskDatabase
+import com.example.taskreminder.util.BackupData
+import com.example.taskreminder.util.BackupImportResult
+import com.example.taskreminder.util.BackupUtil
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
@@ -19,8 +23,10 @@ import kotlin.math.max
 
 class TaskViewModel(app: Application) : AndroidViewModel(app) {
 
-    private val dao = TaskDatabase.getInstance(app).taskDao()
-    private val habitDao = TaskDatabase.getInstance(app).habitDao()
+    private val database = TaskDatabase.getInstance(app)
+    private val dao = database.taskDao()
+    private val moodDao = database.moodDao()
+    private val habitDao = database.habitDao()
     private val scheduler = AlarmScheduler(app)
 
     val tasks: StateFlow<List<Task>> = dao.observeAll()
@@ -231,6 +237,57 @@ class TaskViewModel(app: Application) : AndroidViewModel(app) {
         return count
     }
 
+    fun exportBackup(onReady: (String) -> Unit) {
+        viewModelScope.launch {
+            val data = BackupData(
+                tasks = dao.getAll(),
+                moods = moodDao.getAll(),
+                habits = habitDao.getAll()
+            )
+            onReady(BackupUtil.toJson(data))
+        }
+    }
+
+    fun importBackup(
+        json: String,
+        onSuccess: (BackupImportResult) -> Unit,
+        onError: (Throwable) -> Unit
+    ) {
+        viewModelScope.launch {
+            try {
+                val data = BackupUtil.fromJson(json)
+                val taskIdMap = mutableMapOf<Long, Long>()
+                database.withTransaction {
+                    data.tasks.forEach { source ->
+                        val newId = dao.insert(source.copy(id = 0))
+                        if (source.id != 0L) taskIdMap[source.id] = newId
+                    }
+                    data.habits.forEach { habit ->
+                        val newTaskId = taskIdMap[habit.taskId] ?: return@forEach
+                        habitDao.upsert(habit.copy(taskId = newTaskId))
+                    }
+                    data.moods.forEach { mood ->
+                        moodDao.insert(mood.copy(id = 0))
+                    }
+                }
+                data.tasks.forEach { source ->
+                    val newId = taskIdMap[source.id] ?: return@forEach
+                    val saved = source.copy(id = newId)
+                    if (!saved.isCompleted && saved.enabled) scheduler.schedule(saved)
+                }
+                onSuccess(
+                    BackupImportResult(
+                        taskCount = data.tasks.size,
+                        moodCount = data.moods.size,
+                        habitCount = data.habits.size
+                    )
+                )
+            } catch (error: Throwable) {
+                onError(error)
+            }
+        }
+    }
+
     fun clearCompleted() {
         viewModelScope.launch { dao.clearCompleted() }
     }
@@ -267,4 +324,5 @@ class TaskViewModel(app: Application) : AndroidViewModel(app) {
         add(Calendar.DAY_OF_YEAR, days)
     }.timeInMillis
 }
+
 

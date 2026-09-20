@@ -51,10 +51,10 @@ import androidx.compose.material.icons.rounded.VisibilityOff
 import androidx.compose.material.icons.rounded.WbSunny
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -201,11 +201,13 @@ fun TaskListScreen(
         ActivityResultContracts.CreateDocument("application/json")
     ) { uri: Uri? ->
         if (uri != null) {
-            try {
-                BackupUtil.writeToUri(context, uri, BackupUtil.toJson(tasks))
-                Toast.makeText(context, "已导出 ${tasks.size} 条任务", Toast.LENGTH_SHORT).show()
-            } catch (e: Exception) {
-                Toast.makeText(context, "导出失败：${e.message}", Toast.LENGTH_LONG).show()
+            vm.exportBackup { json ->
+                try {
+                    BackupUtil.writeToUri(context, uri, json)
+                    Toast.makeText(context, "完整备份已导出", Toast.LENGTH_SHORT).show()
+                } catch (e: Exception) {
+                    Toast.makeText(context, "导出失败：${e.message}", Toast.LENGTH_LONG).show()
+                }
             }
         }
     }
@@ -215,11 +217,21 @@ fun TaskListScreen(
     ) { uri: Uri? ->
         if (uri != null) {
             try {
-                val importList = BackupUtil.fromJson(BackupUtil.readFromUri(context, uri))
-                vm.importTasks(importList)
-                Toast.makeText(context, "已导入 ${importList.size} 条任务", Toast.LENGTH_SHORT).show()
+                vm.importBackup(
+                    json = BackupUtil.readFromUri(context, uri),
+                    onSuccess = { result ->
+                        Toast.makeText(
+                            context,
+                            "已导入：任务 ${result.taskCount}、心情 ${result.moodCount}、打卡 ${result.habitCount}",
+                            Toast.LENGTH_LONG
+                        ).show()
+                    },
+                    onError = { error ->
+                        Toast.makeText(context, "导入失败：${error.message}", Toast.LENGTH_LONG).show()
+                    }
+                )
             } catch (e: Exception) {
-                Toast.makeText(context, "导入失败：${e.message}", Toast.LENGTH_LONG).show()
+                Toast.makeText(context, "读取失败：${e.message}", Toast.LENGTH_LONG).show()
             }
         }
     }
@@ -746,6 +758,7 @@ private fun HabitRow(
     )
     var menuOpen by remember { mutableStateOf(false) }
     val accent = MaterialTheme.colorScheme.tertiary
+    val failureColor = MaterialTheme.colorScheme.error
     val days = remember(records, now) { habitDays(records, now) }
 
     Card(
@@ -763,7 +776,6 @@ private fun HabitRow(
                         .clickable(enabled = !checked, onClick = onToggle),
                     contentAlignment = Alignment.Center
                 ) {
-                    val errorColor = MaterialTheme.colorScheme.error
                     Canvas(modifier = Modifier.fillMaxSize()) {
                         val stroke = 5.dp.toPx()
                         drawArc(
@@ -774,7 +786,7 @@ private fun HabitRow(
                             style = Stroke(width = stroke, cap = StrokeCap.Round)
                         )
                         drawArc(
-                            color = if (failed) errorColor else accent,
+                            color = if (failed) failureColor else accent,
                             startAngle = -90f,
                             sweepAngle = 360f * animatedProgress,
                             useCenter = false,
@@ -1163,12 +1175,12 @@ private fun TaskRow(
     onDelete: () -> Unit,
     showCountdown: Boolean = false
 ) {
-    var menuOpen by remember { mutableStateOf(false) }
     val todayStart = remember(now) { startOfDay(now) }
     val checked = if (isHabit) task.lastCompletedDay == todayStart else task.isCompleted
     val overdue = !isHabit && !task.isCompleted && task.dueTime < now
     val meta = formatTaskMeta(task, now, isHabit, showCountdown)
     val cardAlpha = if (checked) 0.62f else 1f
+    var menuOpen by remember { mutableStateOf(false) }
 
     Card(
         onClick = onClick,
@@ -1447,6 +1459,8 @@ private fun groupTasks(tasks: List<Task>, now: Long): Groups {
 
     return Groups(habits, today, future, completed)
 }
+
+
 
 
 

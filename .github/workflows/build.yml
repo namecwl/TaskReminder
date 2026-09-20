@@ -8,11 +8,11 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
     env:
       LANG: C.UTF-8
       LC_ALL: C.UTF-8
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
 

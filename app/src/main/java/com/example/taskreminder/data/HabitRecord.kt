@@ -30,6 +30,9 @@ interface HabitDao {
     @Query("SELECT * FROM habit_check_ins ORDER BY dayStart ASC")
     fun observeAll(): Flow<List<HabitCheckIn>>
 
+    @Query("SELECT * FROM habit_check_ins ORDER BY dayStart ASC")
+    suspend fun getAll(): List<HabitCheckIn>
+
     @Query("SELECT * FROM habit_check_ins WHERE taskId = :taskId ORDER BY dayStart ASC")
     suspend fun getForTask(taskId: Long): List<HabitCheckIn>
 
@@ -45,3 +48,4 @@ interface HabitDao {
     @Query("DELETE FROM habit_check_ins WHERE taskId = :taskId")
     suspend fun deleteForTask(taskId: Long)
 }
+

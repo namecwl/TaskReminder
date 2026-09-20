@@ -763,8 +763,8 @@ private fun HabitRow(
                         .clickable(enabled = !checked, onClick = onToggle),
                     contentAlignment = Alignment.Center
                 ) {
-                    Canvas(modifier = Modifier.fillMaxSize()) {
                     val errorColor = MaterialTheme.colorScheme.error
+                    Canvas(modifier = Modifier.fillMaxSize()) {
                         val stroke = 5.dp.toPx()
                         drawArc(
                             color = accent.copy(alpha = 0.14f),
@@ -774,7 +774,7 @@ private fun HabitRow(
                             style = Stroke(width = stroke, cap = StrokeCap.Round)
                         )
                         drawArc(
-                            color = if (failed) MaterialTheme.colorScheme.error else accent,
+                            color = if (failed) errorColor else accent,
                             startAngle = -90f,
                             sweepAngle = 360f * animatedProgress,
                             useCenter = false,

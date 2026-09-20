@@ -66,6 +66,12 @@ dependencies {
     debugImplementation("androidx.compose.ui:ui-tooling")
 }
 
+tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile> {
+    compilerOptions {
+        freeCompilerArgs.add("-Xutf8")
+    }
+}
+
 
 
 

@@ -8,6 +8,9 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      LANG: C.UTF-8
+      LC_ALL: C.UTF-8
     permissions:
       contents: read
     steps:
@@ -25,6 +28,10 @@ jobs:
           unzip -q gradle-8.7-bin.zip
           echo "$PWD/gradle-8.7/bin" >> $GITHUB_PATH
 
+      - name: Run Unit Tests
+        continue-on-error: true
+        run: gradle testDebugUnitTest --no-daemon
+
       - name: Build Release APK
         run: gradle assembleRelease --no-daemon
 
@@ -33,4 +40,3 @@ jobs:
         with:
           name: TaskReminder-APK
           path: app/build/outputs/apk/release/*.apk
-

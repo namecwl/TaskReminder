@@ -12,18 +12,31 @@ android {
         applicationId = "com.example.taskreminder"
         minSdk = 26
         targetSdk = 34
-        versionCode = 2
-        versionName = "2.0"
+        versionCode = 9
+        versionName = "2.7"
+    }
+
+    signingConfigs {
+        create("release") {
+            storeFile = rootProject.file("keystore/taskreminder-release.jks")
+            storePassword = "TaskReminder2026!"
+            keyAlias = "taskreminder"
+            keyPassword = "TaskReminder2026!"
+        }
     }
 
     buildTypes {
+        debug {
+            signingConfig = signingConfigs.getByName("release")
+        }
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.getByName("release")
         }
     }
 
@@ -61,7 +74,11 @@ dependencies {
 
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
 
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("org.jetbrains.kotlin:kotlin-stdlib:1.9.24")
+
     debugImplementation("androidx.compose.ui:ui-tooling")
 }
+
 
 

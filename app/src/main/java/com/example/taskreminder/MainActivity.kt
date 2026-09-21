@@ -2,6 +2,7 @@ package com.example.taskreminder
 
 import android.content.Context
 import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
@@ -19,6 +20,7 @@ import com.example.taskreminder.ui.PermissionScreen
 import com.example.taskreminder.ui.TaskEditScreen
 import com.example.taskreminder.ui.TaskListScreen
 import com.example.taskreminder.ui.theme.AppTheme
+import com.example.taskreminder.util.InteractionCopy
 import com.example.taskreminder.util.OngoingNotifier
 import com.example.taskreminder.vm.TaskViewModel
 
@@ -78,7 +80,9 @@ private fun AppRoot() {
             TaskEditScreen(
                 task = task,
                 onSave = { updatedTask ->
+                    val isNew = task == null || task.id == 0L
                     vm.save(updatedTask)
+                    Toast.makeText(context, InteractionCopy.saveSuccess(isNew), Toast.LENGTH_SHORT).show()
                     editing = null
                 },
                 onCancel = { editing = null }

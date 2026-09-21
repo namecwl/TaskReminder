@@ -64,6 +64,7 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import com.example.taskreminder.util.InteractionCopy
 
 /**
  * 首次权限引导和后台保活设置页。
@@ -147,7 +148,7 @@ fun PermissionScreen(onDone: () -> Unit) {
                 color = MaterialTheme.colorScheme.onBackground
             )
             Text(
-                "开启通知、常驻提醒和后台权限。iQOO / OriginOS 对后台限制较严格，建议四项都完成。",
+                InteractionCopy.permissionIntro(),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )

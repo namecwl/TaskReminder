@@ -26,6 +26,7 @@ import androidx.compose.material.icons.rounded.CalendarMonth
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.EditNote
+import androidx.compose.material.icons.rounded.LocalFireDepartment
 import androidx.compose.material.icons.rounded.NotificationsActive
 import androidx.compose.material.icons.rounded.Repeat
 import androidx.compose.material.icons.rounded.Save
@@ -84,7 +85,7 @@ fun TaskEditScreen(
     onCancel: () -> Unit
 ) {
     val context = LocalContext.current
-    val isNew = task == null
+    val isNew = task == null || task.id == 0L
 
     var title by remember { mutableStateOf(task?.title ?: "") }
     var note by remember { mutableStateOf(task?.note ?: "") }
@@ -98,6 +99,7 @@ fun TaskEditScreen(
     var advance by remember {
         mutableStateOf((task?.advanceMinutes ?: 5).toString())
     }
+    var streakInput by remember { mutableStateOf((task?.streak ?: 0).toString()) }
 
     var showDatePicker by remember { mutableStateOf(false) }
     var showTimePicker by remember { mutableStateOf(false) }
@@ -106,6 +108,25 @@ fun TaskEditScreen(
         if (title.isBlank()) {
             Toast.makeText(context, "请先填写任务标题", Toast.LENGTH_SHORT).show()
         } else {
+            val newStreak = if (repeatRule == RepeatRule.NONE) {
+                0
+            } else {
+                (streakInput.toIntOrNull() ?: 0).coerceAtLeast(0)
+            }
+            val newTotal = if (repeatRule == RepeatRule.NONE) {
+                0
+            } else if (task != null && newStreak == task.streak) {
+                task.totalCompletions.coerceAtLeast(newStreak)
+            } else {
+                newStreak
+            }
+            val existingLastDay = task?.lastCompletedDay ?: 0L
+            val newLastCompletedDay = when {
+                repeatRule == RepeatRule.NONE -> 0L
+                existingLastDay > 0L -> existingLastDay
+                newStreak > 0 -> yesterdayStart()
+                else -> 0L
+            }
             onSave(
                 (task ?: Task()).copy(
                     title = title.trim(),
@@ -118,7 +139,10 @@ fun TaskEditScreen(
                     advanceMinutes = (advance.toIntOrNull() ?: 0).coerceIn(0, 1440),
                     isCompleted = false,
                     completedAt = null,
-                    enabled = true
+                    enabled = true,
+                    streak = newStreak,
+                    totalCompletions = newTotal,
+                    lastCompletedDay = newLastCompletedDay
                 )
             )
         }
@@ -207,6 +231,26 @@ fun TaskEditScreen(
                 title = "提醒时间",
                 subtitle = "到点后按通知设置提醒"
             ) {
+                val quickDates = listOf(
+                    "今天" to 0,
+                    "明天" to 1,
+                    "后天" to 2,
+                    "一周后" to 7
+                )
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    quickDates.forEach { (label, offset) ->
+                        val target = shiftDay(dueTime, offset)
+                        FilterChip(
+                            selected = isSameDay(dueTime, target),
+                            onClick = { dueTime = shiftDay(dueTime, offset) },
+                            label = { Text(label) }
+                        )
+                    }
+                }
+                Spacer(Modifier.height(10.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     PickerTile(
                         icon = Icons.Rounded.CalendarMonth,
@@ -319,6 +363,29 @@ fun TaskEditScreen(
                 }
             }
 
+            if (repeatRule != RepeatRule.NONE) {
+                EditSectionCard(
+                    icon = Icons.Rounded.LocalFireDepartment,
+                    title = "打卡记录",
+                    subtitle = "已经坚持过一段时间时，可以直接修改连续天数"
+                ) {
+                    OutlinedTextField(
+                        value = streakInput,
+                        onValueChange = { streakInput = it.filter { char -> char.isDigit() } },
+                        label = { Text("累计打卡天数") },
+                        placeholder = { Text("例如：30") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        "设置后从昨天开始计算最近连续记录，今天仍可继续打卡。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
             EditSectionCard(
                 icon = Icons.Rounded.NotificationsActive,
                 title = "提前提醒",
@@ -505,6 +572,30 @@ private fun PickerTile(
     }
 }
 
+private fun isSameDay(first: Long, second: Long): Boolean =
+    dayStart(first) == dayStart(second)
+
+private fun shiftDay(time: Long, offsetDays: Int): Long = Calendar.getInstance().apply {
+    timeInMillis = time
+    add(Calendar.DAY_OF_YEAR, offsetDays)
+}.timeInMillis
+
+private fun dayStart(time: Long): Long = Calendar.getInstance().apply {
+    timeInMillis = time
+    set(Calendar.HOUR_OF_DAY, 0)
+    set(Calendar.MINUTE, 0)
+    set(Calendar.SECOND, 0)
+    set(Calendar.MILLISECOND, 0)
+}.timeInMillis
+
+private fun yesterdayStart(): Long = Calendar.getInstance().apply {
+    add(Calendar.DAY_OF_YEAR, -1)
+    set(Calendar.HOUR_OF_DAY, 0)
+    set(Calendar.MINUTE, 0)
+    set(Calendar.SECOND, 0)
+    set(Calendar.MILLISECOND, 0)
+}.timeInMillis
+
 private fun defaultDueTime(): Long {
     val calendar = Calendar.getInstance()
     calendar.add(Calendar.HOUR_OF_DAY, 1)
@@ -513,6 +604,16 @@ private fun defaultDueTime(): Long {
     calendar.set(Calendar.MILLISECOND, 0)
     return calendar.timeInMillis
 }
+
+
+
+
+
+
+
+
+
+
 
 
 

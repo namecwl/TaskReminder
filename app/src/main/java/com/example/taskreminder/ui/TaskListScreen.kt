@@ -618,7 +618,8 @@ private fun QuickAddCard(
                 }
             }
 
-            if (preview != null) {
+            val p = preview
+            if (p != null) {
                 Surface(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -632,20 +633,20 @@ private fun QuickAddCard(
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                "将添加：${preview.title}",
+                                "将添加：${p.title}",
                                 style = MaterialTheme.typography.labelLarge,
                                 color = MaterialTheme.colorScheme.onPrimaryContainer,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )
                             Text(
-                                formatParsedPreview(preview),
+                                formatParsedPreview(p),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.78f)
                             )
                         }
                         TextButton(onClick = {
-                            onDetails(preview)
+                            onDetails(p)
                             value = ""
                         }) {
                             Icon(

@@ -5,7 +5,9 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.room.withTransaction
 import com.example.taskreminder.alarm.AlarmScheduler
+import com.example.taskreminder.alarm.NotificationHelper
 import com.example.taskreminder.data.HabitCheckIn
+import com.example.taskreminder.data.HabitCheckInMode
 import com.example.taskreminder.data.HabitStatus
 import com.example.taskreminder.data.RepeatRule
 import com.example.taskreminder.data.Task
@@ -34,14 +36,11 @@ class TaskViewModel(app: Application) : AndroidViewModel(app) {
     val tasks: StateFlow<List<Task>> = dao.observeAll()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
-    /**
-     * taskId -> dayStart -> status。
-     * UI 用它展示今天是否完成、未完成，以及最近 7 天和历史日历。
-     */
-    val habitRecords: StateFlow<Map<Long, Map<Long, String>>> = habitDao.observeAll()
+    /** taskId -> dayStart -> HabitCheckIn。 */
+    val habitRecords: StateFlow<Map<Long, Map<Long, HabitCheckIn>>> = habitDao.observeAll()
         .map { records ->
             records.groupBy { it.taskId }.mapValues { (_, taskRecords) ->
-                taskRecords.associate { it.dayStart to it.status }
+                taskRecords.associateBy { it.dayStart }
             }
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
@@ -64,38 +63,47 @@ class TaskViewModel(app: Application) : AndroidViewModel(app) {
 
     fun save(task: Task) {
         viewModelScope.launch {
-            if (task.id == 0L) {
-                val id = dao.insert(task)
-                var saved = task.copy(id = id)
+            val normalized = task.copy(
+                habitTarget = task.habitTarget.coerceAtLeast(1),
+                habitUnit = task.habitUnit.trim().ifBlank { "次" },
+                habitIcon = task.habitIcon.trim().ifBlank { "✅" }
+            )
+            if (normalized.id == 0L) {
+                val id = dao.insert(normalized)
+                var saved = normalized.copy(id = id)
                 if (saved.repeatRule != RepeatRule.NONE) {
                     if (saved.streak > 0 || saved.totalCompletions > 0) {
                         seedHabitRecords(saved)
                         saved = recomputeHabitStats(id) ?: saved
                     }
                 }
-                if (!saved.isCompleted && saved.enabled) scheduler.schedule(saved)
+                if (!saved.isCompleted && saved.enabled && !saved.habitArchived) {
+                    scheduler.schedule(saved)
+                }
             } else {
-                val previous = dao.getById(task.id)
-                scheduler.cancel(task)
-                dao.update(task)
+                val previous = dao.getById(normalized.id)
+                if (previous != null) scheduler.cancel(previous)
+                dao.update(normalized)
 
-                if (task.repeatRule != RepeatRule.NONE) {
+                if (normalized.repeatRule != RepeatRule.NONE) {
                     val statsChanged = previous == null ||
-                        previous.streak != task.streak ||
-                        previous.totalCompletions != task.totalCompletions ||
-                        previous.lastCompletedDay != task.lastCompletedDay
+                        previous.streak != normalized.streak ||
+                        previous.totalCompletions != normalized.totalCompletions ||
+                        previous.lastCompletedDay != normalized.lastCompletedDay
                     if (statsChanged) {
-                        habitDao.deleteForTask(task.id)
-                        seedHabitRecords(task)
-                    } else if (habitDao.countForTask(task.id) == 0 &&
-                        (task.streak > 0 || task.totalCompletions > 0)
+                        habitDao.deleteForTask(normalized.id)
+                        seedHabitRecords(normalized)
+                    } else if (habitDao.countForTask(normalized.id) == 0 &&
+                        (normalized.streak > 0 || normalized.totalCompletions > 0)
                     ) {
-                        seedHabitRecords(task)
+                        seedHabitRecords(normalized)
                     }
-                    val recomputed = recomputeHabitStats(task.id) ?: task
-                    if (!recomputed.isCompleted && recomputed.enabled) scheduler.schedule(recomputed)
-                } else if (!task.isCompleted && task.enabled) {
-                    scheduler.schedule(task)
+                    val recomputed = recomputeHabitStats(normalized.id) ?: normalized
+                    if (!recomputed.isCompleted && recomputed.enabled && !recomputed.habitArchived) {
+                        scheduler.schedule(recomputed)
+                    }
+                } else if (!normalized.isCompleted && normalized.enabled) {
+                    scheduler.schedule(normalized)
                 }
             }
         }
@@ -104,6 +112,7 @@ class TaskViewModel(app: Application) : AndroidViewModel(app) {
     fun delete(task: Task) {
         viewModelScope.launch {
             scheduler.cancel(task)
+            NotificationHelper.cancel(getApplication(), task.id)
             if (task.repeatRule != RepeatRule.NONE) habitDao.deleteForTask(task.id)
             dao.delete(task)
         }
@@ -112,21 +121,11 @@ class TaskViewModel(app: Application) : AndroidViewModel(app) {
     fun toggleComplete(task: Task) {
         viewModelScope.launch {
             if (task.repeatRule != RepeatRule.NONE) {
-                val today = todayStartMillis()
-                val current = habitDao.getForTask(task.id)
-                    .firstOrNull { it.dayStart == today }
-                    ?.status
-                // 重复点击已完成的圆环时保持幂等，不允许因为重复打卡减少累计天数。
-                if (current != HabitStatus.DONE) {
-                    setHabitStatusInternal(
-                        taskId = task.id,
-                        dayStart = today,
-                        status = HabitStatus.DONE
-                    )
-                }
+                toggleHabitToday(task)
             } else {
                 if (!task.isCompleted) {
                     scheduler.cancel(task)
+                    NotificationHelper.cancel(getApplication(), task.id)
                     dao.update(
                         task.copy(isCompleted = true, completedAt = System.currentTimeMillis())
                     )
@@ -139,22 +138,106 @@ class TaskViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    /** 供习惯日历使用：完成、未完成或恢复为待打卡。 */
-    fun setHabitStatus(task: Task, dayStart: Long, status: String?) {
+    private suspend fun toggleHabitToday(task: Task) {
+        val today = todayStartMillis()
+        val current = habitDao.getDay(task.id, today)
+        if (current?.status == HabitStatus.DONE) {
+            habitDao.deleteDay(task.id, today)
+        } else {
+            val nextAmount = when (task.habitCheckInMode) {
+                HabitCheckInMode.AUTO -> (current?.amount ?: 0).coerceAtLeast(0) + 1
+                else -> task.habitTarget.coerceAtLeast(1)
+            }
+            val status = if (nextAmount >= task.habitTarget.coerceAtLeast(1)) {
+                HabitStatus.DONE
+            } else {
+                HabitStatus.PROGRESS
+            }
+            habitDao.upsert(
+                HabitCheckIn(
+                    taskId = task.id,
+                    dayStart = today,
+                    status = status,
+                    amount = nextAmount,
+                    note = current?.note.orEmpty()
+                )
+            )
+            if (status == HabitStatus.DONE) {
+                NotificationHelper.cancel(getApplication(), task.id)
+            }
+        }
+        recomputeHabitStats(task.id)
+    }
+
+    /** 直接设置某一天的状态；日历补记和详情页共用。 */
+    fun setHabitStatus(
+        task: Task,
+        dayStart: Long,
+        status: String?,
+        amount: Int = task.habitTarget,
+        note: String = ""
+    ) {
         viewModelScope.launch {
-            setHabitStatusInternal(task.id, dayStart, status)
+            setHabitStatusInternal(task.id, dayStart, status, amount, note)
+            if (status == HabitStatus.DONE && startOfDay(dayStart) == todayStartMillis()) {
+                NotificationHelper.cancel(getApplication(), task.id)
+            }
         }
     }
 
-    private suspend fun setHabitStatusInternal(taskId: Long, dayStart: Long, status: String?) {
+    /** 手动记录完成量，达到目标时自动转为已完成。 */
+    fun recordHabitAmount(task: Task, dayStart: Long, amount: Int, note: String) {
+        viewModelScope.launch {
+            val normalizedAmount = amount.coerceAtLeast(0)
+            val status = when {
+                normalizedAmount >= task.habitTarget.coerceAtLeast(1) -> HabitStatus.DONE
+                normalizedAmount > 0 || note.isNotBlank() -> HabitStatus.PROGRESS
+                else -> null
+            }
+            setHabitStatusInternal(task.id, dayStart, status, normalizedAmount, note)
+            if (status == HabitStatus.DONE && startOfDay(dayStart) == todayStartMillis()) {
+                NotificationHelper.cancel(getApplication(), task.id)
+            }
+        }
+    }
+
+    fun setHabitArchived(task: Task, archived: Boolean) {
+        viewModelScope.launch {
+            val updated = task.copy(habitArchived = archived)
+            if (archived) {
+                scheduler.cancel(updated)
+                NotificationHelper.cancel(getApplication(), updated.id)
+            }
+            dao.update(updated)
+            if (!archived && updated.enabled && !updated.isCompleted) {
+                scheduler.schedule(updated)
+            }
+        }
+    }
+
+    private suspend fun setHabitStatusInternal(
+        taskId: Long,
+        dayStart: Long,
+        status: String?,
+        amount: Int = 1,
+        note: String = ""
+    ) {
+        val normalizedDay = startOfDay(dayStart)
         if (status == null) {
-            habitDao.deleteDay(taskId, dayStart)
+            habitDao.deleteDay(taskId, normalizedDay)
         } else {
+            val safeAmount = when (status) {
+                HabitStatus.DONE -> amount.coerceAtLeast(1)
+                HabitStatus.FAILED -> 0
+                else -> amount.coerceAtLeast(0)
+            }
             habitDao.upsert(
                 HabitCheckIn(
                     taskId = taskId,
-                    dayStart = startOfDay(dayStart),
-                    status = status
+                    dayStart = normalizedDay,
+                    status = status,
+                    amount = safeAmount,
+                    note = note.trim()
                 )
             )
         }
@@ -179,6 +262,7 @@ class TaskViewModel(app: Application) : AndroidViewModel(app) {
                     taskId = task.id,
                     dayStart = addDays(endDay, -index),
                     status = HabitStatus.DONE,
+                    amount = task.habitTarget.coerceAtLeast(1),
                     updatedAt = now
                 )
             )
@@ -192,6 +276,7 @@ class TaskViewModel(app: Application) : AndroidViewModel(app) {
                     taskId = task.id,
                     dayStart = addDays(endDay, -(streak + 2 + index * 2)),
                     status = HabitStatus.DONE,
+                    amount = task.habitTarget.coerceAtLeast(1),
                     updatedAt = now
                 )
             )
@@ -201,7 +286,11 @@ class TaskViewModel(app: Application) : AndroidViewModel(app) {
     private suspend fun recomputeHabitStats(taskId: Long): Task? {
         val task = dao.getById(taskId) ?: return null
         val records = habitDao.getForTask(taskId)
-        if (records.isEmpty()) return task
+        if (records.isEmpty()) {
+            val cleared = task.copy(streak = 0, totalCompletions = 0, lastCompletedDay = 0L)
+            if (cleared != task) dao.update(cleared)
+            return cleared
+        }
 
         val doneDays = records.asSequence()
             .filter { it.status == HabitStatus.DONE }
@@ -276,7 +365,9 @@ class TaskViewModel(app: Application) : AndroidViewModel(app) {
                 data.tasks.forEach { source ->
                     val newId = taskIdMap[source.id] ?: return@forEach
                     val saved = source.copy(id = newId)
-                    if (!saved.isCompleted && saved.enabled) scheduler.schedule(saved)
+                    if (!saved.isCompleted && saved.enabled && !saved.habitArchived) {
+                        scheduler.schedule(saved)
+                    }
                 }
                 onSuccess(
                     BackupImportResult(
@@ -307,7 +398,9 @@ class TaskViewModel(app: Application) : AndroidViewModel(app) {
                     seedHabitRecords(saved)
                     saved = recomputeHabitStats(id) ?: saved
                 }
-                if (!saved.isCompleted && saved.enabled) scheduler.schedule(saved)
+                if (!saved.isCompleted && saved.enabled && !saved.habitArchived) {
+                    scheduler.schedule(saved)
+                }
             }
         }
     }
@@ -327,9 +420,3 @@ class TaskViewModel(app: Application) : AndroidViewModel(app) {
         add(Calendar.DAY_OF_YEAR, days)
     }.timeInMillis
 }
-
-
-
-
-
-

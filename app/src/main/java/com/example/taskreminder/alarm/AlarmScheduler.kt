@@ -14,7 +14,7 @@ class AlarmScheduler(private val context: Context) {
 
     fun schedule(task: Task) {
         cancel(task)
-        if (!task.enabled || task.isCompleted) return
+        if (!task.enabled || task.isCompleted || task.habitArchived) return
         val now = System.currentTimeMillis()
 
         if (task.advanceMinutes > 0) {

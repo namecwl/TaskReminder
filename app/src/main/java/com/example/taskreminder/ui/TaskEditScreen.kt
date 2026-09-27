@@ -1,8 +1,11 @@
 package com.example.taskreminder.ui
 
 import android.widget.Toast
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -44,6 +47,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TimePicker
@@ -58,12 +62,15 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import com.example.taskreminder.data.HabitCheckInMode
 import com.example.taskreminder.data.RepeatRule
 import com.example.taskreminder.data.Task
 import java.text.SimpleDateFormat
@@ -100,6 +107,16 @@ fun TaskEditScreen(
         mutableStateOf((task?.advanceMinutes ?: 5).toString())
     }
     var streakInput by remember { mutableStateOf((task?.streak ?: 0).toString()) }
+    var habitColor by remember { mutableStateOf(task?.habitColor ?: "#4B8DF8") }
+    var habitIcon by remember { mutableStateOf(task?.habitIcon ?: "✅") }
+    var habitTarget by remember {
+        mutableStateOf((task?.habitTarget ?: 1).coerceAtLeast(1).toString())
+    }
+    var habitUnit by remember { mutableStateOf(task?.habitUnit ?: "次") }
+    var habitCheckInMode by remember {
+        mutableStateOf(task?.habitCheckInMode ?: HabitCheckInMode.COMPLETE)
+    }
+    var habitLogEnabled by remember { mutableStateOf(task?.habitLogEnabled ?: true) }
 
     var showDatePicker by remember { mutableStateOf(false) }
     var showTimePicker by remember { mutableStateOf(false) }
@@ -142,7 +159,13 @@ fun TaskEditScreen(
                     enabled = true,
                     streak = newStreak,
                     totalCompletions = newTotal,
-                    lastCompletedDay = newLastCompletedDay
+                    lastCompletedDay = newLastCompletedDay,
+                    habitColor = habitColor,
+                    habitIcon = habitIcon.ifBlank { "✅" },
+                    habitTarget = (habitTarget.toIntOrNull() ?: 1).coerceAtLeast(1),
+                    habitUnit = habitUnit.trim().ifBlank { "次" },
+                    habitCheckInMode = habitCheckInMode,
+                    habitLogEnabled = habitLogEnabled
                 )
             )
         }
@@ -360,6 +383,156 @@ fun TaskEditScreen(
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
+                }
+            }
+
+            if (repeatRule != RepeatRule.NONE) {
+                EditSectionCard(
+                    icon = Icons.Rounded.Repeat,
+                    title = "习惯设置",
+                    subtitle = "主题、目标与打卡方式会显示在独立习惯详情页"
+                ) {
+                    Text(
+                        "图标",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.height(7.dp))
+                    val iconOptions = listOf(
+                        "✅", "📚", "💧", "🏃", "🧘", "🥗", "💤", "✍️", "🎯", "🚭"
+                    )
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        iconOptions.forEach { icon ->
+                            Surface(
+                                modifier = Modifier
+                                    .size(42.dp)
+                                    .clickable { habitIcon = icon },
+                                shape = CircleShape,
+                                color = if (habitIcon == icon) {
+                                    MaterialTheme.colorScheme.primaryContainer
+                                } else {
+                                    MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)
+                                },
+                                border = if (habitIcon == icon) {
+                                    androidx.compose.foundation.BorderStroke(
+                                        1.5.dp,
+                                        MaterialTheme.colorScheme.primary
+                                    )
+                                } else null
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Text(icon, style = MaterialTheme.typography.titleLarge)
+                                }
+                            }
+                        }
+                    }
+
+                    Spacer(Modifier.height(16.dp))
+                    Text(
+                        "主题色",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.height(7.dp))
+                    val colors = listOf(
+                        "#4B8DF8", "#39A9DB", "#42B883", "#8B6FE8",
+                        "#F08C4A", "#E85D75", "#3F51B5", "#20A4A8"
+                    )
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(9.dp),
+                        verticalArrangement = Arrangement.spacedBy(7.dp)
+                    ) {
+                        colors.forEach { value ->
+                            val selected = habitColor.equals(value, ignoreCase = true)
+                            Box(
+                                modifier = Modifier
+                                    .size(38.dp)
+                                    .clip(CircleShape)
+                                    .background(Color(android.graphics.Color.parseColor(value)))
+                                    .border(
+                                        width = if (selected) 3.dp else 0.dp,
+                                        color = if (selected) {
+                                            MaterialTheme.colorScheme.onSurface
+                                        } else {
+                                            Color.Transparent
+                                        },
+                                        shape = CircleShape
+                                    )
+                                    .clickable { habitColor = value }
+                            )
+                        }
+                    }
+
+                    Spacer(Modifier.height(16.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        OutlinedTextField(
+                            value = habitTarget,
+                            onValueChange = {
+                                habitTarget = it.filter(Char::isDigit).ifBlank { "1" }
+                            },
+                            label = { Text("每天目标") },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            singleLine = true,
+                            modifier = Modifier.weight(1f)
+                        )
+                        OutlinedTextField(
+                            value = habitUnit,
+                            onValueChange = { habitUnit = it.take(6) },
+                            label = { Text("单位") },
+                            placeholder = { Text("次 / 杯") },
+                            singleLine = true,
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+
+                    Spacer(Modifier.height(14.dp))
+                    Text(
+                        "打卡方式",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.height(7.dp))
+                    val modes = listOf(
+                        HabitCheckInMode.COMPLETE to "完成全部",
+                        HabitCheckInMode.AUTO to "自动记录",
+                        HabitCheckInMode.MANUAL to "手动记录"
+                    )
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        modes.forEach { (value, label) ->
+                            FilterChip(
+                                selected = habitCheckInMode == value,
+                                onClick = { habitCheckInMode = value },
+                                label = { Text(label) }
+                            )
+                        }
+                    }
+
+                    Spacer(Modifier.height(10.dp))
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { habitLogEnabled = !habitLogEnabled },
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("打卡日志", style = MaterialTheme.typography.bodyLarge)
+                            Text(
+                                "允许在详情页记录每天完成后的想法",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Switch(
+                            checked = habitLogEnabled,
+                            onCheckedChange = { habitLogEnabled = it }
+                        )
+                    }
                 }
             }
 

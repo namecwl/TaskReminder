@@ -31,6 +31,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.Archive
 import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.CalendarMonth
 import androidx.compose.material.icons.rounded.Check
@@ -95,6 +96,8 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.taskreminder.alarm.OngoingReminderService
+import com.example.taskreminder.data.HabitCheckIn
+import com.example.taskreminder.data.HabitCheckInMode
 import com.example.taskreminder.data.HabitStatus
 import com.example.taskreminder.data.RepeatRule
 import com.example.taskreminder.data.Task
@@ -130,7 +133,8 @@ fun TaskListScreen(
     vm: TaskViewModel,
     onEdit: (Task) -> Unit,
     onNew: () -> Unit,
-    onOpenSettings: () -> Unit
+    onOpenSettings: () -> Unit,
+    onOpenHabit: (Task) -> Unit
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -138,7 +142,7 @@ fun TaskListScreen(
     val habitRecords by vm.habitRecords.collectAsStateWithLifecycle()
     val moodVm: MoodViewModel = viewModel()
     val moodEntries by moodVm.entries.collectAsStateWithLifecycle()
-    var habitCalendarTask by remember { mutableStateOf<Task?>(null) }
+    var showArchivedHabits by remember { mutableStateOf(false) }
     var showMoodHistory by remember { mutableStateOf(false) }
     var showMoodComposer by remember { mutableStateOf(false) }
     var moodJustSaved by remember { mutableStateOf(false) }
@@ -194,13 +198,33 @@ fun TaskListScreen(
         OngoingReminderService.start(context)
     }
 
-    habitCalendarTask?.let { calendarTask ->
-        HabitCalendarDialog(
-            task = calendarTask,
-            records = habitRecords[calendarTask.id].orEmpty(),
-            onDismiss = { habitCalendarTask = null },
-            onSetStatus = { dayStart, status ->
-                vm.setHabitStatus(calendarTask, dayStart, status)
+    if (showArchivedHabits) {
+        val archived = tasks.filter { it.repeatRule != RepeatRule.NONE && it.habitArchived }
+        AlertDialog(
+            onDismissRequest = { showArchivedHabits = false },
+            title = { Text("已归档习惯") },
+            text = {
+                if (archived.isEmpty()) {
+                    Text("暂无已归档习惯")
+                } else {
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        archived.forEach { task ->
+                            TextButton(
+                                onClick = {
+                                    showArchivedHabits = false
+                                    onOpenHabit(task)
+                                },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text("${task.habitIcon} ${task.title}", modifier = Modifier.weight(1f))
+                                Text("查看")
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showArchivedHabits = false }) { Text("完成") }
             }
         )
     }
@@ -337,6 +361,14 @@ fun TaskListScreen(
                                 }
                             )
                             DropdownMenuItem(
+                                text = { Text("已归档习惯") },
+                                leadingIcon = { Icon(Icons.Rounded.Archive, null) },
+                                onClick = {
+                                    menuOpen = false
+                                    showArchivedHabits = true
+                                }
+                            )
+                            DropdownMenuItem(
                                 text = { Text("清理已完成") },
                                 leadingIcon = { Icon(Icons.Rounded.CleaningServices, null) },
                                 onClick = {
@@ -447,12 +479,18 @@ fun TaskListScreen(
                         task = task,
                         now = now,
                         records = habitRecords[task.id].orEmpty(),
-                        onClick = { onEdit(task) },
-                        onToggle = { vm.toggleComplete(task) },
+                        onClick = { onOpenHabit(task) },
+                        onToggle = {
+                            if (task.habitCheckInMode == HabitCheckInMode.MANUAL) {
+                                onOpenHabit(task)
+                            } else {
+                                vm.toggleComplete(task)
+                            }
+                        },
                         onSetStatus = { dayStart, status ->
                             vm.setHabitStatus(task, dayStart, status)
                         },
-                        onViewCalendar = { habitCalendarTask = task },
+                        onViewCalendar = { onOpenHabit(task) },
                         onDelete = { vm.delete(task) }
                     )
                 }
@@ -767,7 +805,7 @@ private fun EmptyState(icon: ImageVector, title: String, subtitle: String) {
 private fun HabitRow(
     task: Task,
     now: Long,
-    records: Map<Long, String>,
+    records: Map<Long, HabitCheckIn>,
     onClick: () -> Unit,
     onToggle: () -> Unit,
     onSetStatus: (dayStart: Long, status: String?) -> Unit,
@@ -775,9 +813,11 @@ private fun HabitRow(
     onDelete: () -> Unit
 ) {
     val todayStart = remember(now) { startOfDay(now) }
-    val todayStatus = records[todayStart]
+    val todayRecord = records[todayStart]
+    val todayStatus = todayRecord?.status
     val checked = todayStatus == HabitStatus.DONE
     val failed = todayStatus == HabitStatus.FAILED
+    val inProgress = todayStatus == HabitStatus.PROGRESS
     val streak = task.streak.coerceAtLeast(0)
     val total = task.totalCompletions.coerceAtLeast(streak)
     val nextMilestone = habitNextMilestone(total)
@@ -788,7 +828,11 @@ private fun HabitRow(
         label = "habitRing"
     )
     var menuOpen by remember { mutableStateOf(false) }
-    val accent = MaterialTheme.colorScheme.tertiary
+    val fallbackAccent = MaterialTheme.colorScheme.tertiary
+    val accent = remember(task.habitColor, fallbackAccent) {
+        runCatching { Color(android.graphics.Color.parseColor(task.habitColor)) }
+            .getOrDefault(fallbackAccent)
+    }
     val failureColor = MaterialTheme.colorScheme.error
     val days = remember(records, now) { habitDays(records, now) }
 
@@ -804,7 +848,7 @@ private fun HabitRow(
                 Box(
                     modifier = Modifier
                         .size(56.dp)
-                        .clickable(enabled = !checked, onClick = onToggle),
+                        .clickable(onClick = onToggle),
                     contentAlignment = Alignment.Center
                 ) {
                     Canvas(modifier = Modifier.fillMaxSize()) {
@@ -847,7 +891,11 @@ private fun HabitRow(
                                     color = MaterialTheme.colorScheme.onErrorContainer
                                 )
                                 else -> Text(
-                                    streak.toString(),
+                                    if (inProgress) {
+                                        todayRecord?.amount?.toString().orEmpty()
+                                    } else {
+                                        streak.toString()
+                                    },
                                     style = MaterialTheme.typography.labelLarge,
                                     color = accent,
                                     fontWeight = FontWeight.Bold
@@ -913,7 +961,7 @@ private fun HabitRow(
                             }
                         )
                         DropdownMenuItem(
-                            text = { Text("查看打卡日历") },
+                            text = { Text("打开习惯详情") },
                             leadingIcon = { Icon(Icons.Rounded.CalendarMonth, null) },
                             onClick = {
                                 menuOpen = false
@@ -962,6 +1010,7 @@ private fun HabitRow(
                     when {
                         failed -> "今天已标记为未完成，连续记录会暂时中断"
                         checked -> todayCheckedLabel(streak)
+                        inProgress -> "今日 ${todayRecord?.amount ?: 0}/${task.habitTarget} ${task.habitUnit}"
                         else -> habitMilestoneText(total, nextMilestone)
                     },
                     style = MaterialTheme.typography.bodySmall,
@@ -1038,105 +1087,8 @@ private fun HabitDayDot(day: HabitDayState, accent: Color) {
     }
 }
 
-@Composable
-private fun HabitCalendarDialog(
-    task: Task,
-    records: Map<Long, String>,
-    onDismiss: () -> Unit,
-    onSetStatus: (dayStart: Long, status: String?) -> Unit
-) {
-    val days = remember(records) { habitDays(records, System.currentTimeMillis(), 14) }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(task.title.ifBlank { "打卡日历" }) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text(
-                    "点击日期循环切换：待打卡 → 已完成 → 未完成。",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                days.chunked(7).forEach { week ->
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        week.forEach { day ->
-                            HabitCalendarCell(
-                                day = day,
-                                onClick = {
-                                    val next = when (day.status) {
-                                        null -> HabitStatus.DONE
-                                        HabitStatus.DONE -> HabitStatus.FAILED
-                                        else -> null
-                                    }
-                                    onSetStatus(day.dayStart, next)
-                                }
-                            )
-                        }
-                        repeat(7 - week.size) { Spacer(Modifier.width(38.dp)) }
-                    }
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = onDismiss) { Text("完成") }
-        }
-    )
-}
-
-@Composable
-private fun HabitCalendarCell(day: HabitDayState, onClick: () -> Unit) {
-    val done = day.status == HabitStatus.DONE
-    val failed = day.status == HabitStatus.FAILED
-    Column(
-        modifier = Modifier
-            .width(38.dp)
-            .clickable(onClick = onClick),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Text(
-            day.weekdayLabel,
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        Spacer(Modifier.height(3.dp))
-        Surface(
-            modifier = Modifier.size(32.dp),
-            shape = CircleShape,
-            color = when {
-                done -> MaterialTheme.colorScheme.primary
-                failed -> MaterialTheme.colorScheme.errorContainer
-                day.today -> MaterialTheme.colorScheme.primaryContainer
-                else -> MaterialTheme.colorScheme.surfaceVariant
-            }
-        ) {
-            Box(contentAlignment = Alignment.Center) {
-                when {
-                    done -> Icon(
-                        Icons.Rounded.Check,
-                        contentDescription = null,
-                        tint = Color.White,
-                        modifier = Modifier.size(16.dp)
-                    )
-                    failed -> Text(
-                        "×",
-                        color = MaterialTheme.colorScheme.onErrorContainer,
-                        fontWeight = FontWeight.Bold
-                    )
-                    else -> Text(
-                        day.dateLabel,
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-        }
-    }
-}
-
 private fun habitDays(
-    records: Map<Long, String>,
+    records: Map<Long, HabitCheckIn>,
     now: Long,
     count: Int = 7
 ): List<HabitDayState> {
@@ -1152,7 +1104,7 @@ private fun habitDays(
                 .get(Calendar.DAY_OF_MONTH)
                 .toString(),
             weekdayLabel = weekdayLabel(day),
-            status = records[day],
+            status = records[day]?.status,
             today = offset == 0
         )
     }
@@ -1479,7 +1431,7 @@ private fun groupTasks(tasks: List<Task>, now: Long): Groups {
     val completed = tasks.filter { it.isCompleted }
     val active = tasks.filter { !it.isCompleted && it.enabled }
 
-    val habits = active.filter { it.repeatRule != RepeatRule.NONE }
+    val habits = active.filter { it.repeatRule != RepeatRule.NONE && !it.habitArchived }
         .sortedBy { it.dueTime }
     val nonRepeat = active.filter { it.repeatRule == RepeatRule.NONE }
     val today = nonRepeat.filter { it.dueTime < tomorrowStart }.sortedBy { it.dueTime }

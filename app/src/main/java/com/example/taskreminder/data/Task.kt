@@ -20,7 +20,14 @@ data class Task(
     val enabled: Boolean = true,
     val streak: Int = 0,
     val totalCompletions: Int = 0,
-    val lastCompletedDay: Long = 0L
+    val lastCompletedDay: Long = 0L,
+    val habitColor: String = "#4B8DF8",
+    val habitIcon: String = "✅",
+    val habitTarget: Int = 1,
+    val habitUnit: String = "次",
+    val habitCheckInMode: String = HabitCheckInMode.COMPLETE,
+    val habitLogEnabled: Boolean = true,
+    val habitArchived: Boolean = false
 )
 
 

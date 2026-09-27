@@ -78,7 +78,8 @@ class NotificationActionReceiver : BroadcastReceiver() {
             HabitCheckIn(
                 taskId = task.id,
                 dayStart = todayStart,
-                status = HabitStatus.DONE
+                status = HabitStatus.DONE,
+                amount = task.habitTarget.coerceAtLeast(1)
             )
         )
         val doneDays = habitDao.getForTask(task.id)
@@ -115,7 +116,10 @@ class NotificationActionReceiver : BroadcastReceiver() {
 
     private fun calculateCurrentStreak(doneDays: Set<Long>, today: Long): Int {
         if (doneDays.isEmpty()) return 0
-        val yesterday = today - 86_400_000L
+        val yesterday = Calendar.getInstance().apply {
+            timeInMillis = today
+            add(Calendar.DAY_OF_YEAR, -1)
+        }.timeInMillis
         var cursor = when {
             today in doneDays -> today
             yesterday in doneDays -> yesterday
@@ -124,7 +128,10 @@ class NotificationActionReceiver : BroadcastReceiver() {
         var count = 0
         while (cursor in doneDays) {
             count++
-            cursor -= 86_400_000L
+            cursor = Calendar.getInstance().apply {
+                timeInMillis = cursor
+                add(Calendar.DAY_OF_YEAR, -1)
+            }.timeInMillis
         }
         return count
     }

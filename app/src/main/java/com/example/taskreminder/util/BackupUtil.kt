@@ -47,6 +47,13 @@ object BackupUtil {
                 put("streak", task.streak)
                 put("totalCompletions", task.totalCompletions)
                 put("lastCompletedDay", task.lastCompletedDay)
+                put("habitColor", task.habitColor)
+                put("habitIcon", task.habitIcon)
+                put("habitTarget", task.habitTarget)
+                put("habitUnit", task.habitUnit)
+                put("habitCheckInMode", task.habitCheckInMode)
+                put("habitLogEnabled", task.habitLogEnabled)
+                put("habitArchived", task.habitArchived)
             })
         }
 
@@ -65,12 +72,14 @@ object BackupUtil {
                 put("taskId", habit.taskId)
                 put("dayStart", habit.dayStart)
                 put("status", habit.status)
+                put("amount", habit.amount)
+                put("note", habit.note)
                 put("updatedAt", habit.updatedAt)
             })
         }
 
         return JSONObject().apply {
-            put("version", 3)
+            put("version", 4)
             put("exportedAt", System.currentTimeMillis())
             put("tasks", taskArray)
             put("moods", moodArray)
@@ -110,7 +119,17 @@ object BackupUtil {
                         "totalCompletions",
                         item.optInt("streak", 0)
                     ),
-                    lastCompletedDay = item.optLong("lastCompletedDay", 0L)
+                    lastCompletedDay = item.optLong("lastCompletedDay", 0L),
+                    habitColor = item.optString("habitColor", "#4B8DF8"),
+                    habitIcon = item.optString("habitIcon", "✅"),
+                    habitTarget = item.optInt("habitTarget", 1).coerceAtLeast(1),
+                    habitUnit = item.optString("habitUnit", "次").ifBlank { "次" },
+                    habitCheckInMode = item.optString(
+                        "habitCheckInMode",
+                        "COMPLETE"
+                    ),
+                    habitLogEnabled = item.optBoolean("habitLogEnabled", true),
+                    habitArchived = item.optBoolean("habitArchived", false)
                 )
             )
         }
@@ -137,6 +156,8 @@ object BackupUtil {
                     taskId = item.optLong("taskId"),
                     dayStart = item.optLong("dayStart"),
                     status = item.optString("status", "DONE"),
+                    amount = item.optInt("amount", 1).coerceAtLeast(0),
+                    note = item.optString("note"),
                     updatedAt = item.optLong("updatedAt", System.currentTimeMillis())
                 )
             )

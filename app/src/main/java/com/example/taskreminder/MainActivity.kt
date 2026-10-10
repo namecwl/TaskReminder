@@ -21,6 +21,7 @@ import com.example.taskreminder.ui.HabitDetailScreen
 import com.example.taskreminder.ui.PermissionScreen
 import com.example.taskreminder.ui.TaskEditScreen
 import com.example.taskreminder.ui.TaskListScreen
+import com.example.taskreminder.ui.UpdateScreen
 import com.example.taskreminder.ui.theme.AppTheme
 import com.example.taskreminder.util.InteractionCopy
 import com.example.taskreminder.util.OngoingNotifier
@@ -60,6 +61,7 @@ private fun AppRoot() {
     }
     var editing by remember { mutableStateOf<Pair<Boolean, Task?>?>(null) }
     var viewingHabitId by remember { mutableStateOf<Long?>(null) }
+    var showingUpdate by remember { mutableStateOf(false) }
     val tasks by vm.tasks.collectAsStateWithLifecycle()
     val habitRecords by vm.habitRecords.collectAsStateWithLifecycle()
     val viewingHabit = viewingHabitId?.let { id -> tasks.firstOrNull { it.id == id } }
@@ -71,11 +73,12 @@ private fun AppRoot() {
         OngoingReminderService.start(context)
     }
 
-    BackHandler(enabled = editing != null || showOnboarding || viewingHabitId != null) {
+    BackHandler(enabled = editing != null || showOnboarding || viewingHabitId != null || showingUpdate) {
         when {
             editing != null -> editing = null
             showOnboarding -> finishOnboarding()
             viewingHabitId != null -> viewingHabitId = null
+            showingUpdate -> showingUpdate = false
         }
     }
 
@@ -117,12 +120,15 @@ private fun AppRoot() {
             )
         }
 
+        showingUpdate -> UpdateScreen(onBack = { showingUpdate = false })
+
         else -> TaskListScreen(
             vm = vm,
             onEdit = { task -> editing = true to task },
             onNew = { editing = true to null },
             onOpenSettings = { showOnboarding = true },
-            onOpenHabit = { task -> viewingHabitId = task.id }
+            onOpenHabit = { task -> viewingHabitId = task.id },
+            onOpenUpdate = { showingUpdate = true }
         )
     }
 }

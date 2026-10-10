@@ -46,6 +46,7 @@ import androidx.compose.material.icons.rounded.Repeat
 import androidx.compose.material.icons.rounded.Schedule
 import androidx.compose.material.icons.rounded.Send
 import androidx.compose.material.icons.rounded.Tune
+import androidx.compose.material.icons.rounded.SystemUpdate
 import androidx.compose.material.icons.rounded.UploadFile
 import androidx.compose.material.icons.rounded.Visibility
 import androidx.compose.material.icons.rounded.VisibilityOff
@@ -134,7 +135,8 @@ fun TaskListScreen(
     onEdit: (Task) -> Unit,
     onNew: () -> Unit,
     onOpenSettings: () -> Unit,
-    onOpenHabit: (Task) -> Unit
+    onOpenHabit: (Task) -> Unit,
+    onOpenUpdate: () -> Unit
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -339,6 +341,14 @@ fun TaskListScreen(
                                 onClick = {
                                     menuOpen = false
                                     onOpenSettings()
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("检查更新") },
+                                leadingIcon = { Icon(Icons.Rounded.SystemUpdate, null) },
+                                onClick = {
+                                    menuOpen = false
+                                    onOpenUpdate()
                                 }
                             )
                             DropdownMenuItem(

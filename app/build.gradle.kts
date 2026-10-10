@@ -12,8 +12,8 @@ android {
         applicationId = "com.example.taskreminder"
         minSdk = 26
         targetSdk = 34
-        versionCode = 10
-        versionName = "2.8"
+        versionCode = 12
+        versionName = "2.9.1"
     }
 
     signingConfigs {

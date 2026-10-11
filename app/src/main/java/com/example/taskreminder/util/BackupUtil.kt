@@ -54,6 +54,7 @@ object BackupUtil {
                 put("habitCheckInMode", task.habitCheckInMode)
                 put("habitLogEnabled", task.habitLogEnabled)
                 put("habitArchived", task.habitArchived)
+                put("archived", task.archived)
             })
         }
 
@@ -129,7 +130,8 @@ object BackupUtil {
                         "COMPLETE"
                     ),
                     habitLogEnabled = item.optBoolean("habitLogEnabled", true),
-                    habitArchived = item.optBoolean("habitArchived", false)
+                    habitArchived = item.optBoolean("habitArchived", false),
+                    archived = item.optBoolean("archived", false)
                 )
             )
         }

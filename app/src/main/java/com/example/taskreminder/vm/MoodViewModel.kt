@@ -32,6 +32,12 @@ class MoodViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    fun update(entry: MoodEntry) {
+        viewModelScope.launch {
+            dao.update(entry.copy(note = entry.note.trim()))
+        }
+    }
+
     fun delete(entry: MoodEntry) {
         viewModelScope.launch { dao.delete(entry) }
     }

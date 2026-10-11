@@ -77,7 +77,7 @@ class TaskViewModel(app: Application) : AndroidViewModel(app) {
                         saved = recomputeHabitStats(id) ?: saved
                     }
                 }
-                if (!saved.isCompleted && saved.enabled && !saved.habitArchived) {
+                if (!saved.isCompleted && saved.enabled && !saved.habitArchived && !saved.archived) {
                     scheduler.schedule(saved)
                 }
             } else {
@@ -99,10 +99,10 @@ class TaskViewModel(app: Application) : AndroidViewModel(app) {
                         seedHabitRecords(normalized)
                     }
                     val recomputed = recomputeHabitStats(normalized.id) ?: normalized
-                    if (!recomputed.isCompleted && recomputed.enabled && !recomputed.habitArchived) {
+                    if (!recomputed.isCompleted && recomputed.enabled && !recomputed.habitArchived && !recomputed.archived) {
                         scheduler.schedule(recomputed)
                     }
-                } else if (!normalized.isCompleted && normalized.enabled) {
+                } else if (!normalized.isCompleted && normalized.enabled && !normalized.archived) {
                     scheduler.schedule(normalized)
                 }
             }
@@ -197,6 +197,20 @@ class TaskViewModel(app: Application) : AndroidViewModel(app) {
             setHabitStatusInternal(task.id, dayStart, status, normalizedAmount, note)
             if (status == HabitStatus.DONE && startOfDay(dayStart) == todayStartMillis()) {
                 NotificationHelper.cancel(getApplication(), task.id)
+            }
+        }
+    }
+
+    fun setTaskArchived(task: Task, archived: Boolean) {
+        viewModelScope.launch {
+            val updated = task.copy(archived = archived)
+            if (archived) {
+                scheduler.cancel(updated)
+                NotificationHelper.cancel(getApplication(), updated.id)
+            }
+            dao.update(updated)
+            if (!archived && !updated.isCompleted && updated.enabled) {
+                scheduler.schedule(updated)
             }
         }
     }
@@ -365,7 +379,7 @@ class TaskViewModel(app: Application) : AndroidViewModel(app) {
                 data.tasks.forEach { source ->
                     val newId = taskIdMap[source.id] ?: return@forEach
                     val saved = source.copy(id = newId)
-                    if (!saved.isCompleted && saved.enabled && !saved.habitArchived) {
+                    if (!saved.isCompleted && saved.enabled && !saved.habitArchived && !saved.archived) {
                         scheduler.schedule(saved)
                     }
                 }
@@ -398,7 +412,7 @@ class TaskViewModel(app: Application) : AndroidViewModel(app) {
                     seedHabitRecords(saved)
                     saved = recomputeHabitStats(id) ?: saved
                 }
-                if (!saved.isCompleted && saved.enabled && !saved.habitArchived) {
+                if (!saved.isCompleted && saved.enabled && !saved.habitArchived && !saved.archived) {
                     scheduler.schedule(saved)
                 }
             }

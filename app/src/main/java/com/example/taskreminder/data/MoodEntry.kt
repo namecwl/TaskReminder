@@ -6,6 +6,7 @@ import androidx.room.Entity
 import androidx.room.Insert
 import androidx.room.PrimaryKey
 import androidx.room.Query
+import androidx.room.Update
 import kotlinx.coroutines.flow.Flow
 
 /**
@@ -31,6 +32,9 @@ interface MoodDao {
 
     @Insert
     suspend fun insert(entry: MoodEntry): Long
+
+    @Update
+    suspend fun update(entry: MoodEntry)
 
     @Delete
     suspend fun delete(entry: MoodEntry)

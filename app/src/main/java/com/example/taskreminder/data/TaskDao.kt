@@ -30,7 +30,7 @@ interface TaskDao {
     @Delete
     suspend fun delete(task: Task)
 
-    @Query("DELETE FROM tasks WHERE isCompleted = 1")
+    @Query("DELETE FROM tasks WHERE isCompleted = 1 AND archived = 0")
     suspend fun clearCompleted()
 }
 

@@ -23,6 +23,7 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.NewReleases
 import androidx.compose.material.icons.filled.OpenInNew
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
@@ -330,4 +331,31 @@ private fun UpdateStatusCard(
             }
         }
     }
+}
+
+
+@Composable
+fun UpdateAvailableDialog(
+    info: UpdateInfo,
+    onLater: () -> Unit,
+    onViewUpdate: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onLater,
+        icon = { Icon(Icons.Default.NewReleases, contentDescription = null) },
+        title = { Text("发现新版本 ${info.version}") },
+        text = {
+            Text(
+                info.notes.ifBlank { "本次更新包含体验与稳定性优化，可前往更新页面手动下载安装。" },
+                maxLines = 8,
+                overflow = TextOverflow.Ellipsis
+            )
+        },
+        confirmButton = {
+            Button(onClick = onViewUpdate) { Text("查看更新") }
+        },
+        dismissButton = {
+            TextButton(onClick = onLater) { Text("稍后") }
+        }
+    )
 }

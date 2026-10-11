@@ -34,6 +34,7 @@ import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Archive
 import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.CalendarMonth
+import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.CleaningServices
 import androidx.compose.material.icons.rounded.Delete
@@ -136,7 +137,9 @@ fun TaskListScreen(
     onNew: () -> Unit,
     onOpenSettings: () -> Unit,
     onOpenHabit: (Task) -> Unit,
-    onOpenUpdate: () -> Unit
+    onOpenUpdate: () -> Unit,
+    onOpenCompleted: () -> Unit,
+    onOpenArchive: () -> Unit
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -144,26 +147,18 @@ fun TaskListScreen(
     val habitRecords by vm.habitRecords.collectAsStateWithLifecycle()
     val moodVm: MoodViewModel = viewModel()
     val moodEntries by moodVm.entries.collectAsStateWithLifecycle()
-    var showArchivedHabits by remember { mutableStateOf(false) }
     var showMoodHistory by remember { mutableStateOf(false) }
     var showMoodComposer by remember { mutableStateOf(false) }
-    var moodJustSaved by remember { mutableStateOf(false) }
+    var moodFeedback by remember { mutableStateOf<MoodFeedback?>(null) }
     var menuOpen by remember { mutableStateOf(false) }
-    var showCompleted by remember { mutableStateOf(false) }
     var now by remember { mutableStateOf(System.currentTimeMillis()) }
-
-    LaunchedEffect(moodJustSaved) {
-        if (moodJustSaved) {
-            delay(1_600L)
-            moodJustSaved = false
-        }
-    }
 
     if (showMoodHistory) {
         MoodHistoryScreen(
             entries = moodEntries,
             onBack = { showMoodHistory = false },
             onAdd = { showMoodComposer = true },
+            onUpdate = moodVm::update,
             onDelete = moodVm::delete
         )
         MoodComposerDialog(
@@ -172,9 +167,10 @@ fun TaskListScreen(
             onSave = { moodKey, note ->
                 moodVm.add(moodKey, note)
                 showMoodComposer = false
-                moodJustSaved = true
+                moodFeedback = buildMoodFeedback(moodKey, note)
             }
         )
+        MoodSavedFeedbackDialog(feedback = moodFeedback, onDismiss = { moodFeedback = null })
         return
     }
 
@@ -184,9 +180,10 @@ fun TaskListScreen(
         onSave = { moodKey, note ->
             moodVm.add(moodKey, note)
             showMoodComposer = false
-            moodJustSaved = true
+            moodFeedback = buildMoodFeedback(moodKey, note)
         }
     )
+    MoodSavedFeedbackDialog(feedback = moodFeedback, onDismiss = { moodFeedback = null })
     LaunchedEffect(Unit) {
         while (true) {
             val current = System.currentTimeMillis()
@@ -200,36 +197,6 @@ fun TaskListScreen(
         OngoingReminderService.start(context)
     }
 
-    if (showArchivedHabits) {
-        val archived = tasks.filter { it.repeatRule != RepeatRule.NONE && it.habitArchived }
-        AlertDialog(
-            onDismissRequest = { showArchivedHabits = false },
-            title = { Text("已归档习惯") },
-            text = {
-                if (archived.isEmpty()) {
-                    Text("暂无已归档习惯")
-                } else {
-                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        archived.forEach { task ->
-                            TextButton(
-                                onClick = {
-                                    showArchivedHabits = false
-                                    onOpenHabit(task)
-                                },
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Text("${task.habitIcon} ${task.title}", modifier = Modifier.weight(1f))
-                                Text("查看")
-                            }
-                        }
-                    }
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = { showArchivedHabits = false }) { Text("完成") }
-            }
-        )
-    }
     val exportLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.CreateDocument("application/json")
     ) { uri: Uri? ->
@@ -315,11 +282,10 @@ fun TaskListScreen(
                     }
                 },
                 actions = {
-                    IconButton(onClick = { showCompleted = !showCompleted }) {
+                    IconButton(onClick = onOpenCompleted) {
                         Icon(
-                            if (showCompleted) Icons.Rounded.VisibilityOff
-                            else Icons.Rounded.Visibility,
-                            contentDescription = if (showCompleted) "隐藏已完成" else "显示已完成",
+                            Icons.Rounded.CheckCircle,
+                            contentDescription = "查看已完成",
                             tint = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
@@ -375,7 +341,7 @@ fun TaskListScreen(
                                 leadingIcon = { Icon(Icons.Rounded.Archive, null) },
                                 onClick = {
                                     menuOpen = false
-                                    showArchivedHabits = true
+                                    onOpenArchive()
                                 }
                             )
                             DropdownMenuItem(
@@ -416,7 +382,7 @@ fun TaskListScreen(
             item {
                 TodayMoodCard(
                     entries = moodEntries,
-                    justSaved = moodJustSaved,
+                    savedFeedback = moodFeedback,
                     onAdd = { showMoodComposer = true },
                     onViewAll = { showMoodHistory = true }
                 )
@@ -460,7 +426,8 @@ fun TaskListScreen(
                         },
                         onClick = { onEdit(task) },
                         onToggle = { vm.toggleComplete(task) },
-                        onDelete = { vm.delete(task) }
+                        onDelete = { vm.delete(task) },
+                        onArchive = { vm.setTaskArchived(task, true) }
                     )
                 }
             }
@@ -534,33 +501,12 @@ fun TaskListScreen(
                         showCountdown = true,
                         onClick = { onEdit(task) },
                         onToggle = { vm.toggleComplete(task) },
-                        onDelete = { vm.delete(task) }
+                        onDelete = { vm.delete(task) },
+                        onArchive = { vm.setTaskArchived(task, true) }
                     )
                 }
             }
 
-            if (showCompleted && groups.completed.isNotEmpty()) {
-                item {
-                    SectionHeader(
-                        title = "已完成",
-                        subtitle = "已经收尾的任务",
-                        count = groups.completed.size,
-                        accent = MaterialTheme.colorScheme.onSurfaceVariant,
-                        onAdd = null
-                    )
-                }
-                items(groups.completed, key = { "done_${it.id}" }) { task ->
-                    TaskRow(
-                        task = task,
-                        now = now,
-                        isHabit = false,
-                        accent = MaterialTheme.colorScheme.onSurfaceVariant,
-                        onClick = { onEdit(task) },
-                        onToggle = { vm.toggleComplete(task) },
-                        onDelete = { vm.delete(task) }
-                    )
-                }
-            }
         }
     }
 }
@@ -1166,6 +1112,7 @@ private fun TaskRow(
     onClick: () -> Unit,
     onToggle: () -> Unit,
     onDelete: () -> Unit,
+    onArchive: () -> Unit = {},
     showCountdown: Boolean = false
 ) {
     val todayStart = remember(now) { startOfDay(now) }
@@ -1326,6 +1273,16 @@ private fun TaskRow(
                             onClick()
                         }
                     )
+                    if (!isHabit) {
+                        DropdownMenuItem(
+                            text = { Text("归档") },
+                            leadingIcon = { Icon(Icons.Rounded.Archive, null) },
+                            onClick = {
+                                menuOpen = false
+                                onArchive()
+                            }
+                        )
+                    }
                     DropdownMenuItem(
                         text = { Text("删除") },
                         leadingIcon = { Icon(Icons.Rounded.Delete, null) },
@@ -1438,8 +1395,8 @@ private fun groupTasks(tasks: List<Task>, now: Long): Groups {
     val todayStart = startOfDay(now)
     val tomorrowStart = todayStart + 86_400_000L
 
-    val completed = tasks.filter { it.isCompleted }
-    val active = tasks.filter { !it.isCompleted && it.enabled }
+    val completed = tasks.filter { it.isCompleted && !it.archived }
+    val active = tasks.filter { !it.isCompleted && it.enabled && !it.archived && !it.habitArchived }
 
     val habits = active.filter { it.repeatRule != RepeatRule.NONE && !it.habitArchived }
         .sortedBy { it.dueTime }

@@ -27,7 +27,8 @@ data class Task(
     val habitUnit: String = "次",
     val habitCheckInMode: String = HabitCheckInMode.COMPLETE,
     val habitLogEnabled: Boolean = true,
-    val habitArchived: Boolean = false
+    val habitArchived: Boolean = false,
+    val archived: Boolean = false
 )
 
 
